@@ -47,10 +47,10 @@ func TestE2EImportCommand(t *testing.T) {
 		t.Error("Expected index.md to exist in output bundle")
 	}
 
-	// Verify README was imported
-	readmePath := filepath.Join(outDir, "README.md")
+	// Verify README was imported (lowercased by importer)
+	readmePath := filepath.Join(outDir, "readme.md")
 	if _, err := os.Stat(readmePath); os.IsNotExist(err) {
-		t.Error("Expected README.md to exist in output bundle")
+		t.Error("Expected readme.md to exist in output bundle")
 	}
 
 	// Verify installation.md was imported
@@ -65,10 +65,10 @@ func TestE2EImportCommand(t *testing.T) {
 		t.Error("Expected api/overview.md to exist in output bundle")
 	}
 
-	// Verify frontmatter in README.md
+	// Verify frontmatter in readme.md
 	content, err := os.ReadFile(readmePath)
 	if err != nil {
-		t.Fatalf("Failed to read README.md: %v", err)
+		t.Fatalf("Failed to read readme.md: %v", err)
 	}
 	if !strings.HasPrefix(string(content), "---") {
 		t.Error("Expected README.md to have frontmatter")
