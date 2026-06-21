@@ -1,7 +1,7 @@
 ---
 type: API Reference
 title: CLI Commands
-description: Complete reference for all OKFy command-line commands and options.
+description: Complete reference for all OKF-CLI command-line commands and options.
 tags:
   - cli
   - reference

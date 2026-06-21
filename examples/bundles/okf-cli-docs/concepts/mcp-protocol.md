@@ -11,9 +11,9 @@ tags:
 
 The Model Context Protocol (MCP) is a standard for AI agents to interact with external tools and data sources.
 
-## How OKFy Uses MCP
+## How OKF-CLI Uses MCP
 
-OKFy serves OKF bundles through an MCP stdio server, exposing tools that AI agents can use:
+OKF-CLI serves OKF bundles through an MCP stdio server, exposing tools that AI agents can use:
 
 ### Available Tools
 

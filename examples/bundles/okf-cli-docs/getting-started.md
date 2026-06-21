@@ -1,15 +1,15 @@
 ---
 type: Guide
-title: Getting Started with OKFy
-description: Learn how to install and use OKFy to create OKF bundles from your documentation.
+title: Getting Started with OKF-CLI
+description: Learn how to install and use OKF-CLI to create OKF bundles from your documentation.
 tags:
   - quickstart
   - installation
   - tutorial
 ---
-# Getting Started with OKFy
+# Getting Started with OKF-CLI
 
-OKFy is a tool that converts documentation websites and local Markdown folders into Open Knowledge Format (OKF) bundles. These bundles can be served via MCP to AI agents like Claude, Codex, or Cursor.
+OKF-CLI is a tool that converts documentation websites and local Markdown folders into Open Knowledge Format (OKF) bundles. These bundles can be served via MCP to AI agents like Claude, Codex, or Cursor.
 
 ## Installation
 

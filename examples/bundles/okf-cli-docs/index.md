@@ -1,9 +1,9 @@
 ---
 okf_version: "1.0"
 ---
-# OKFy Documentation
+# OKF-CLI Documentation
 
-Welcome to the OKFy documentation bundle. This bundle contains guides and references for using OKFy to convert documentation into Open Knowledge Format bundles.
+Welcome to the OKF-CLI documentation bundle. This bundle contains guides and references for using OKF-CLI to convert documentation into Open Knowledge Format bundles.
 
 ## Contents
 
