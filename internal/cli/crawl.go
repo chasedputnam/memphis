@@ -3,7 +3,6 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -37,7 +36,7 @@ func init() {
 	crawlCmd.Flags().Bool("dangerously-allow-unsafe-output", false, "Allow unsafe output paths with --force")
 	crawlCmd.Flags().Bool("stable-timestamps", false, "Use deterministic timestamps")
 
-	crawlCmd.MarkFlagRequired("out")
+	_ = crawlCmd.MarkFlagRequired("out")
 
 	rootCmd.AddCommand(crawlCmd)
 }
@@ -141,9 +140,4 @@ func makeCrawlProgressHandler(isTTY bool) func(types.CrawlProgressEvent) {
 func isTerminal() bool {
 	fileInfo, _ := os.Stderr.Stat()
 	return (fileInfo.Mode() & os.ModeCharDevice) != 0
-}
-
-func printJSON(v any) {
-	data, _ := json.MarshalIndent(v, "", "  ")
-	fmt.Println(string(data))
 }

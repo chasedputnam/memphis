@@ -12,7 +12,7 @@ func TestNewServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create index.md
 	indexContent := `---
@@ -55,7 +55,7 @@ This is a test concept with some content.
 	}
 
 	if server == nil {
-		t.Error("expected server to be non-nil")
+		t.Fatal("expected server to be non-nil")
 	}
 
 	if server.search == nil {

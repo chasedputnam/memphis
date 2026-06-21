@@ -405,20 +405,20 @@ func (s *crawlState) fetch(ctx context.Context, urlStr string) (string, string, 
 		}
 
 		if resp.StatusCode >= 500 || resp.StatusCode == 429 {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			lastErr = fmt.Errorf("HTTP %d", resp.StatusCode)
 			time.Sleep(time.Duration(250*(1<<attempt)) * time.Millisecond)
 			continue
 		}
 
 		if resp.StatusCode >= 400 {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return "", "", fmt.Errorf("HTTP %d", resp.StatusCode)
 		}
 
 		// Read body with size limit
 		body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		if err != nil {
 			lastErr = err
@@ -454,7 +454,7 @@ func loadRobots(ctx context.Context, seedURL string) *robotstxt.RobotsData {
 	if err != nil {
 		return nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
 		return nil

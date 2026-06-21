@@ -13,14 +13,14 @@ func TestImport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create input dir: %v", err)
 	}
-	defer os.RemoveAll(inputDir)
+	defer func() { _ = os.RemoveAll(inputDir) }()
 
 	// Create test output directory
 	outputDir, err := os.MkdirTemp("", "import-output-*")
 	if err != nil {
 		t.Fatalf("failed to create output dir: %v", err)
 	}
-	defer os.RemoveAll(outputDir)
+	defer func() { _ = os.RemoveAll(outputDir) }()
 
 	// Create test files
 	testFiles := map[string]string{
@@ -87,14 +87,14 @@ func TestImportWithExclude(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create input dir: %v", err)
 	}
-	defer os.RemoveAll(inputDir)
+	defer func() { _ = os.RemoveAll(inputDir) }()
 
 	// Create test output directory
 	outputDir, err := os.MkdirTemp("", "import-output-*")
 	if err != nil {
 		t.Fatalf("failed to create output dir: %v", err)
 	}
-	defer os.RemoveAll(outputDir)
+	defer func() { _ = os.RemoveAll(outputDir) }()
 
 	// Create test files
 	testFiles := map[string]string{
@@ -136,13 +136,13 @@ func TestImportNoFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create input dir: %v", err)
 	}
-	defer os.RemoveAll(inputDir)
+	defer func() { _ = os.RemoveAll(inputDir) }()
 
 	outputDir, err := os.MkdirTemp("", "import-output-*")
 	if err != nil {
 		t.Fatalf("failed to create output dir: %v", err)
 	}
-	defer os.RemoveAll(outputDir)
+	defer func() { _ = os.RemoveAll(outputDir) }()
 
 	// Run import - should fail
 	_, err = Import(ImportOptions{

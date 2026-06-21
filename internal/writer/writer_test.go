@@ -126,8 +126,8 @@ func TestWriteOKFBundleForceRequired(t *testing.T) {
 	outDir := filepath.Join(tmpDir, "existing")
 
 	// Create existing directory with content
-	os.MkdirAll(outDir, 0755)
-	os.WriteFile(filepath.Join(outDir, "existing.txt"), []byte("test"), 0644)
+	_ = os.MkdirAll(outDir, 0755)
+	_ = os.WriteFile(filepath.Join(outDir, "existing.txt"), []byte("test"), 0644)
 
 	docs := []types.NormalizedDocument{
 		{

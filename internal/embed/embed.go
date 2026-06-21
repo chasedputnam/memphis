@@ -22,7 +22,7 @@ func ExtractDemoBundle() (tmpDir string, err error) {
 	// Clean up on error
 	defer func() {
 		if err != nil {
-			os.RemoveAll(tmpDir)
+			_ = os.RemoveAll(tmpDir)
 			tmpDir = ""
 		}
 	}()

@@ -51,7 +51,7 @@ func TestUpdateNoSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create empty bundle dir
 	bundleDir := filepath.Join(tmpDir, "bundle")
@@ -76,7 +76,7 @@ func TestUpdateDryRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	bundleDir := filepath.Join(tmpDir, "bundle")
 	if err := os.MkdirAll(bundleDir, 0755); err != nil {
@@ -125,7 +125,7 @@ func TestUpdateForceMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	bundleDir := filepath.Join(tmpDir, "bundle")
 	if err := os.MkdirAll(bundleDir, 0755); err != nil {
@@ -196,7 +196,7 @@ func TestUpdateWithPromptSkip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	bundleDir := filepath.Join(tmpDir, "bundle")
 	if err := os.MkdirAll(bundleDir, 0755); err != nil {
@@ -264,7 +264,7 @@ func TestUpdateWithPromptCancel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	bundleDir := filepath.Join(tmpDir, "bundle")
 	if err := os.MkdirAll(bundleDir, 0755); err != nil {
@@ -323,7 +323,7 @@ func TestUpdateAdditions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	bundleDir := filepath.Join(tmpDir, "bundle")
 	if err := os.MkdirAll(bundleDir, 0755); err != nil {
@@ -373,7 +373,7 @@ func TestUpdateDeletions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	bundleDir := filepath.Join(tmpDir, "bundle")
 	if err := os.MkdirAll(bundleDir, 0755); err != nil {
@@ -458,7 +458,7 @@ func TestUpdateNoChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	bundleDir := filepath.Join(tmpDir, "bundle")
 	if err := os.MkdirAll(bundleDir, 0755); err != nil {
@@ -513,7 +513,7 @@ func TestUpdateSourceOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	bundleDir := filepath.Join(tmpDir, "bundle")
 	if err := os.MkdirAll(bundleDir, 0755); err != nil {
@@ -554,7 +554,7 @@ func TestUpdateProgressCallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	bundleDir := filepath.Join(tmpDir, "bundle")
 	if err := os.MkdirAll(bundleDir, 0755); err != nil {

@@ -220,9 +220,7 @@ func (s *Server) handleSearchConcepts(ctx context.Context, request mcp.CallToolR
 
 	var tags []string
 	if tagsStr != "" {
-		for _, tag := range splitTags(tagsStr) {
-			tags = append(tags, tag)
-		}
+		tags = append(tags, splitTags(tagsStr)...)
 	}
 
 	srch := s.getSearch()

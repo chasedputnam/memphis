@@ -69,7 +69,7 @@ func NewBundleSearchFromConcepts(concepts map[string]*types.Concept) (*BundleSea
 			Body:        concept.Body,
 		}
 		if err := index.Index(concept.ID, doc); err != nil {
-			index.Close()
+			_ = index.Close()
 			return nil, err
 		}
 	}
@@ -260,7 +260,7 @@ func snippet(concept *types.Concept, queryStr string, maxLen int) string {
 	lower := strings.ToLower(text)
 	terms := strings.Fields(strings.ToLower(queryStr))
 
-	var idx int = -1
+	idx := -1
 	for _, term := range terms {
 		if term != "" {
 			idx = strings.Index(lower, term)

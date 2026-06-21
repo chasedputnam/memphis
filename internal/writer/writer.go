@@ -299,7 +299,7 @@ func writeIndexFiles(opts WriteOptions, conceptsByDir map[string][]writtenConcep
 
 		for _, concept := range concepts {
 			relLink := path.Base(concept.relPath)
-			content.WriteString(fmt.Sprintf("- [%s](%s)\n", concept.title, relLink))
+			_, _ = fmt.Fprintf(&content, "- [%s](%s)\n", concept.title, relLink)
 		}
 
 		indexPath := filepath.Join(opts.OutDir, dir, "index.md")

@@ -47,7 +47,7 @@ This is a test concept with some content.
 		t.Fatalf("failed to write concept: %v", err)
 	}
 
-	return tmpDir, func() { os.RemoveAll(tmpDir) }
+	return tmpDir, func() { _ = os.RemoveAll(tmpDir) }
 }
 
 func createTestServer(t *testing.T, bundleDir string) *Server {
@@ -308,7 +308,7 @@ func TestReloadSearchIndex_KeepsOldOnFailure(t *testing.T) {
 	oldSearch := server.getSearch()
 
 	// Corrupt the bundle by removing all files
-	os.RemoveAll(bundleDir)
+	_ = os.RemoveAll(bundleDir)
 
 	// Reload should fail since directory is gone
 	err := server.reloadSearchIndex()

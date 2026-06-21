@@ -17,11 +17,11 @@ func TestRootCommand(t *testing.T) {
 	rootCmd.SetArgs([]string{"--help"})
 	err := rootCmd.Execute()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if err != nil {
@@ -61,7 +61,7 @@ func TestValidateCommand(t *testing.T) {
 	// Create a minimal valid bundle
 	tmpDir := t.TempDir()
 	bundleDir := filepath.Join(tmpDir, "bundle")
-	os.MkdirAll(bundleDir, 0755)
+	_ = os.MkdirAll(bundleDir, 0755)
 
 	// Create root index.md
 	indexContent := `---
@@ -69,7 +69,7 @@ okf_version: "1.0"
 ---
 # Test Bundle
 `
-	os.WriteFile(filepath.Join(bundleDir, "index.md"), []byte(indexContent), 0644)
+	_ = os.WriteFile(filepath.Join(bundleDir, "index.md"), []byte(indexContent), 0644)
 
 	// Create a concept file
 	conceptContent := `---
@@ -80,7 +80,7 @@ title: Test Concept
 
 This is a test concept.
 `
-	os.WriteFile(filepath.Join(bundleDir, "test.md"), []byte(conceptContent), 0644)
+	_ = os.WriteFile(filepath.Join(bundleDir, "test.md"), []byte(conceptContent), 0644)
 
 	// Reset command for testing
 	rootCmd.SetArgs([]string{"validate", bundleDir})
@@ -97,13 +97,13 @@ func TestImportCommandHelp(t *testing.T) {
 	os.Stdout = w
 
 	rootCmd.SetArgs([]string{"import", "--help"})
-	rootCmd.Execute()
+	_ = rootCmd.Execute()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if !strings.Contains(output, "--out") {
@@ -125,13 +125,13 @@ func TestCrawlCommandHelp(t *testing.T) {
 	os.Stdout = w
 
 	rootCmd.SetArgs([]string{"crawl", "--help"})
-	rootCmd.Execute()
+	_ = rootCmd.Execute()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if !strings.Contains(output, "--max-pages") {
@@ -157,13 +157,13 @@ func TestServeCommandHelp(t *testing.T) {
 	os.Stdout = w
 
 	rootCmd.SetArgs([]string{"serve", "--help"})
-	rootCmd.Execute()
+	_ = rootCmd.Execute()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if !strings.Contains(output, "--mcp") {
@@ -175,22 +175,23 @@ func TestServeCommandHelp(t *testing.T) {
 	}
 }
 
+
 func TestInspectCommandHelp(t *testing.T) {
 	old := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
 	rootCmd.SetArgs([]string{"inspect", "--help"})
-	rootCmd.Execute()
+	_ = rootCmd.Execute()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
-if !strings.Contains(output, "Inspect an OKF bundle") {
+	if !strings.Contains(output, "Inspect an OKF bundle") {
 		t.Errorf("Expected inspect help to describe command")
 	}
 }

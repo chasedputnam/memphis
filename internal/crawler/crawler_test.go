@@ -10,18 +10,19 @@ import (
 func TestCrawlDryRun(t *testing.T) {
 	// Create a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
+		switch r.URL.Path {
+		case "/":
 			w.Header().Set("Content-Type", "text/html")
-			w.Write([]byte(`<html><head><title>Test</title></head><body>
+			_, _ = w.Write([]byte(`<html><head><title>Test</title></head><body>
 				<h1>Welcome</h1>
 				<a href="/page1">Page 1</a>
 				<a href="/page2">Page 2</a>
 			</body></html>`))
-		} else if r.URL.Path == "/robots.txt" {
-			w.Write([]byte("User-agent: *\nAllow: /"))
-		} else {
+		case "/robots.txt":
+			_, _ = w.Write([]byte("User-agent: *\nAllow: /"))
+		default:
 			w.Header().Set("Content-Type", "text/html")
-			w.Write([]byte(`<html><body><h1>Page</h1></body></html>`))
+			_, _ = w.Write([]byte(`<html><body><h1>Page</h1></body></html>`))
 		}
 	}))
 	defer server.Close()
@@ -51,22 +52,23 @@ func TestCrawlDryRun(t *testing.T) {
 func TestCrawlWithServer(t *testing.T) {
 	// Create a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
+		switch r.URL.Path {
+		case "/":
 			w.Header().Set("Content-Type", "text/html")
-			w.Write([]byte(`<html><head><title>Test Site</title></head><body>
+			_, _ = w.Write([]byte(`<html><head><title>Test Site</title></head><body>
 				<h1>Welcome to Test</h1>
 				<p>This is a test page.</p>
 				<a href="/about">About</a>
 			</body></html>`))
-		} else if r.URL.Path == "/about" {
+		case "/about":
 			w.Header().Set("Content-Type", "text/html")
-			w.Write([]byte(`<html><head><title>About</title></head><body>
+			_, _ = w.Write([]byte(`<html><head><title>About</title></head><body>
 				<h1>About Us</h1>
 				<p>Learn more about us.</p>
 			</body></html>`))
-		} else if r.URL.Path == "/robots.txt" {
-			w.Write([]byte("User-agent: *\nAllow: /"))
-		} else {
+		case "/robots.txt":
+			_, _ = w.Write([]byte("User-agent: *\nAllow: /"))
+		default:
 			w.WriteHeader(404)
 		}
 	}))

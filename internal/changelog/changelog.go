@@ -35,7 +35,7 @@ func ReadChangelog(bundlePath string) (*Changelog, error) {
 		}
 		return nil, fmt.Errorf("failed to open changelog: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	cl := &Changelog{}

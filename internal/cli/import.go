@@ -29,7 +29,7 @@ func init() {
 	importCmd.Flags().Bool("dangerously-allow-unsafe-output", false, "Allow unsafe output paths with --force")
 	importCmd.Flags().Bool("stable-timestamps", false, "Use deterministic timestamps")
 
-	importCmd.MarkFlagRequired("out")
+	_ = importCmd.MarkFlagRequired("out")
 }
 
 func runImport(cmd *cobra.Command, args []string) error {

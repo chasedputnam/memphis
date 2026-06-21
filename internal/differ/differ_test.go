@@ -20,7 +20,7 @@ title: Existing
 
 Content here.
 `
-	os.WriteFile(filepath.Join(tmpDir, "existing.md"), []byte(existingContent), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "existing.md"), []byte(existingContent), 0644)
 
 	// New docs include existing and a new file
 	newDocs := []types.NormalizedDocument{
@@ -59,7 +59,7 @@ title: Test
 
 Old content.
 `
-	os.WriteFile(filepath.Join(tmpDir, "test.md"), []byte(existingContent), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "test.md"), []byte(existingContent), 0644)
 
 	// New doc has different content
 	newDocs := []types.NormalizedDocument{
@@ -86,8 +86,8 @@ func TestDiffBundlesDeletedFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create existing bundle with two files
-	os.WriteFile(filepath.Join(tmpDir, "keep.md"), []byte("---\ntype: Concept\n---\n# Keep"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "delete.md"), []byte("---\ntype: Concept\n---\n# Delete"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "keep.md"), []byte("---\ntype: Concept\n---\n# Keep"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "delete.md"), []byte("---\ntype: Concept\n---\n# Delete"), 0644)
 
 	// New docs only have one file
 	newDocs := []types.NormalizedDocument{
@@ -126,7 +126,7 @@ timestamp: "2024-01-01T00:00:00Z"
 
 Same content.
 `
-	os.WriteFile(filepath.Join(tmpDir, "test.md"), []byte(existingContent), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "test.md"), []byte(existingContent), 0644)
 
 	// New doc has same body content but different frontmatter would be generated
 	newDocs := []types.NormalizedDocument{
@@ -148,9 +148,9 @@ func TestDiffBundlesSkipsReservedFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create existing bundle with reserved files
-	os.WriteFile(filepath.Join(tmpDir, "index.md"), []byte("# Index"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "log.md"), []byte("# Log"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "concept.md"), []byte("---\ntype: Concept\n---\n# Concept"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "index.md"), []byte("# Index"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "log.md"), []byte("# Log"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "concept.md"), []byte("---\ntype: Concept\n---\n# Concept"), 0644)
 
 	// New docs don't include reserved files
 	newDocs := []types.NormalizedDocument{
@@ -175,8 +175,8 @@ func TestDiffBundlesSubdirectories(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create existing bundle with subdirectory
-	os.MkdirAll(filepath.Join(tmpDir, "guides"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, "guides", "intro.md"), []byte("---\ntype: Guide\n---\n# Intro"), 0644)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "guides"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "guides", "intro.md"), []byte("---\ntype: Guide\n---\n# Intro"), 0644)
 
 	// New docs include file in subdirectory
 	newDocs := []types.NormalizedDocument{

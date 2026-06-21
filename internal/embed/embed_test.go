@@ -17,7 +17,7 @@ func TestExtractDemoBundle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractDemoBundle failed: %v", err)
 	}
-	defer os.RemoveAll(bundleDir)
+	defer func() { _ = os.RemoveAll(bundleDir) }()
 
 	// Check index.md exists
 	indexPath := filepath.Join(bundleDir, "index.md")

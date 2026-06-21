@@ -15,15 +15,15 @@ func TestMain(m *testing.M) {
 	// Build the binary once for all tests
 	tmpDir, err := os.MkdirTemp("", "okf-cli-test-*")
 	if err != nil {
-		os.Stderr.WriteString("Failed to create temp dir: " + err.Error() + "\n")
+		_, _ = os.Stderr.WriteString("Failed to create temp dir: " + err.Error() + "\n")
 		os.Exit(1)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testBinaryPath = filepath.Join(tmpDir, "okf-cli")
 	cmd := exec.Command("go", "build", "-o", testBinaryPath, "./cmd/okf-cli")
 	if out, err := cmd.CombinedOutput(); err != nil {
-		os.Stderr.WriteString("Failed to build binary: " + err.Error() + "\n" + string(out))
+		_, _ = os.Stderr.WriteString("Failed to build binary: " + err.Error() + "\n" + string(out))
 		os.Exit(1)
 	}
 
