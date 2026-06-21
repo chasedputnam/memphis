@@ -230,7 +230,7 @@ func fetchFromURL(ctx context.Context, url string, opts UpdateOptions) ([]types.
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	result, err := crawler.Crawl(ctx, crawler.CrawlOptions{
 		SeedURL:       url,
@@ -266,7 +266,7 @@ func fetchFromPath(path string, opts UpdateOptions) ([]types.NormalizedDocument,
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	result, err := importer.Import(importer.ImportOptions{
 		InputPath: path,
