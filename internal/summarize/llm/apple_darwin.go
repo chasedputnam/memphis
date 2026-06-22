@@ -1,13 +1,14 @@
-//go:build darwin
+//go:build darwin && (!applefm || !arm64 || !cgo)
 
 package llm
 
 import "context"
 
-// appleProvider is a stub for Apple Intelligence integration. Bridging into
-// the Foundation Models framework requires Swift/Objective-C and is out of
-// scope for this initial implementation; we report unavailable so the engine
-// falls back to Ollama (or the extractive summarizer).
+// appleProvider is the Darwin fallback when the real Apple Foundation Models
+// bridge has not been opted into. The real provider lives in
+// apple_darwin_fm.go and is built only when the `applefm` build tag is set on
+// an Apple-Silicon machine with CGo enabled. Reporting Available() = false
+// causes the engine to fall back to Ollama (or extractive summarization).
 type appleProvider struct{}
 
 func (appleProvider) Name() string { return "apple" }
@@ -18,9 +19,10 @@ func (appleProvider) Generate(_ context.Context, _ string) (string, error) {
 	return "", ErrUnavailable
 }
 
-// newApplePlatformProvider returns a Darwin-side provider stub. The second
-// return value indicates whether the platform is supported (always true on
-// Darwin, even though Available() is currently false).
+// newApplePlatformProvider returns the stub Darwin provider. The second
+// return value signals that the platform is "supported" in the sense that the
+// engine should consult the provider before falling back; Available() = false
+// then routes to Ollama.
 func newApplePlatformProvider() (Provider, bool) {
 	return appleProvider{}, true
 }
