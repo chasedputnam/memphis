@@ -38,6 +38,10 @@ func init() {
 	updateCmd.Flags().Int("concurrency", 4, "Fetch concurrency (for URL sources)")
 	updateCmd.Flags().StringSlice("include", nil, "Include glob or regex patterns")
 	updateCmd.Flags().StringSlice("exclude", nil, "Exclude glob or regex patterns")
+	updateCmd.Flags().String("summarize", "", "Summarization mode override: extractive or llm (defaults to changelog setting)")
+	updateCmd.Flags().String("summarize-algorithm", "", "Extractive algorithm override (defaults to changelog setting)")
+	updateCmd.Flags().String("language", "", "Language override for summarization (defaults to changelog setting)")
+	updateCmd.Flags().String("edmundson-config", "", "Path to edmundson.config YAML (defaults to bundle/edmundson.config or ~/.config/okf-cli/edmundson.config)")
 
 	rootCmd.AddCommand(updateCmd)
 }
@@ -52,20 +56,33 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	concurrency, _ := cmd.Flags().GetInt("concurrency")
 	include, _ := cmd.Flags().GetStringSlice("include")
 	exclude, _ := cmd.Flags().GetStringSlice("exclude")
+	summarizeMode, _ := cmd.Flags().GetString("summarize")
+	summarizeAlgorithm, _ := cmd.Flags().GetString("summarize-algorithm")
+	language, _ := cmd.Flags().GetString("language")
+	edmundsonConfig, _ := cmd.Flags().GetString("edmundson-config")
 
 	isTTY := isTerminal()
 
 	opts := updater.UpdateOptions{
-		BundlePath:  bundlePath,
-		Source:      source,
-		Force:       force,
-		DryRun:      dryRun,
-		MaxPages:    maxPages,
-		MaxDepth:    maxDepth,
-		Concurrency: concurrency,
-		Include:     include,
-		Exclude:     exclude,
-		OnProgress:  makeUpdateProgressHandler(isTTY),
+		BundlePath:                bundlePath,
+		Source:                    source,
+		Force:                     force,
+		DryRun:                    dryRun,
+		MaxPages:                  maxPages,
+		MaxDepth:                  maxDepth,
+		Concurrency:               concurrency,
+		Include:                   include,
+		Exclude:                   exclude,
+		SummarizeMode:             summarizeMode,
+		SummarizeAlgorithm:        summarizeAlgorithm,
+		Language:                  language,
+		EdmundsonConfigPath:       edmundsonConfig,
+		SummarizeModeFlagSet:      cmd.Flags().Changed("summarize"),
+		SummarizeAlgorithmFlagSet: cmd.Flags().Changed("summarize-algorithm"),
+		LanguageFlagSet:           cmd.Flags().Changed("language"),
+		OnProgress:                makeUpdateProgressHandler(isTTY),
+		OnSummarizeProgress:       makeUpdateSummarizeProgressHandler(),
+		OnSummarizeWarning:        makeUpdateSummarizeWarningHandler(),
 	}
 
 	// Set up interactive prompts if not force mode and TTY
@@ -98,11 +115,34 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Skipped: %d files\n", result.Skipped)
 	}
 
+	if result.Stats != nil {
+		printSummaryStats(result.Stats)
+	}
+
 	if result.Added == 0 && result.Modified == 0 && result.Deleted == 0 {
 		color.Yellow("No changes detected")
 	}
 
 	return nil
+}
+
+// makeUpdateSummarizeProgressHandler returns a callback that prints
+// per-file summarization progress to stderr. Mirrors the importer's handler
+// so the two commands feel consistent.
+func makeUpdateSummarizeProgressHandler() func(index, total int, source string) {
+	return func(index, total int, source string) {
+		fmt.Fprintf(os.Stderr, "\rokf-cli update: summarizing %d/%d", index, total)
+		if index == total {
+			fmt.Fprintln(os.Stderr)
+		}
+	}
+}
+
+// makeUpdateSummarizeWarningHandler logs per-file summarization warnings.
+func makeUpdateSummarizeWarningHandler() func(string, string) {
+	return func(path, message string) {
+		color.Yellow("okf-cli update: warning: %s: %s", path, message)
+	}
 }
 
 func makeUpdateProgressHandler(isTTY bool) func(phase string, message string) {

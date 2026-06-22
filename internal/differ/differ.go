@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/chasedputnam/okf-cli/internal/summarize"
 	"github.com/chasedputnam/okf-cli/internal/types"
 	"github.com/chasedputnam/okf-cli/internal/util"
 )
@@ -112,13 +113,15 @@ func stripFrontmatter(content string) string {
 	return strings.TrimPrefix(after, "\n")
 }
 
-// normalizeContent normalizes content for comparison.
+// normalizeContent normalizes content for comparison. It strips frontmatter
+// (which we own and rewrite on every update with new timestamps and
+// backlinks) and the `> [!summary]` callout (which we inject into bundle
+// files but is not present in freshly-fetched source markdown). Without
+// stripping the callout, every file would appear modified on every update.
 func normalizeContent(content string) string {
-	// Strip frontmatter
 	body := stripFrontmatter(content)
-	// Normalize whitespace
+	body = summarize.StripCallout(body)
 	body = strings.TrimSpace(body)
-	// Normalize line endings
 	body = regexp.MustCompile(`\r\n`).ReplaceAllString(body, "\n")
 	return body
 }

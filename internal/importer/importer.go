@@ -24,6 +24,12 @@ type ImportOptions struct {
 	Force                        bool
 	DangerouslyAllowUnsafeOutput bool
 	StableTimestamps             bool
+	SummarizeMode                string
+	SummarizeAlgorithm           string
+	Language                     string
+	EdmundsonConfigPath          string
+	OnProgress                   func(index, total int, source string)
+	OnSummarizeWarning           func(path, message string)
 }
 
 // skipDirs are directories to skip during import.
@@ -149,7 +155,7 @@ func Import(opts ImportOptions) (*types.ImportResult, error) {
 		return nil, fmt.Errorf("no supported Markdown, MDX, HTML, or text files found")
 	}
 
-	written, err := writer.WriteOKFBundle(docs, writer.WriteOptions{
+	res, err := writer.WriteOKFBundleWithStats(docs, writer.WriteOptions{
 		OutDir:                       opts.OutDir,
 		Title:                        opts.SourceName,
 		SourceName:                   opts.SourceName,
@@ -158,13 +164,38 @@ func Import(opts ImportOptions) (*types.ImportResult, error) {
 		DangerouslyAllowUnsafeOutput: opts.DangerouslyAllowUnsafeOutput,
 		Timestamp:                    timestamp,
 		Source:                       root,
+		SummarizeMode:                opts.SummarizeMode,
+		SummarizeAlgorithm:           opts.SummarizeAlgorithm,
+		Language:                     opts.Language,
+		EdmundsonConfigPath:          opts.EdmundsonConfigPath,
+		OnProgress:                   opts.OnProgress,
+		OnSummarizeWarning:           opts.OnSummarizeWarning,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &types.ImportResult{
-		Written:   written,
+		Written:   res.Written,
 		Documents: docs,
+		Stats:     toTypesStats(res.Stats),
 	}, nil
+}
+
+// toTypesStats converts the writer's internal stats into the public
+// types.SummaryStats shape.
+func toTypesStats(s *writer.SummaryStats) *types.SummaryStats {
+	if s == nil {
+		return nil
+	}
+	out := &types.SummaryStats{
+		Total:     s.Total,
+		Fallbacks: s.Fallbacks,
+		Failed:    s.Failed,
+		BySource:  make(map[string]int, len(s.BySource)),
+	}
+	for k, v := range s.BySource {
+		out.BySource[k] = v
+	}
+	return out
 }

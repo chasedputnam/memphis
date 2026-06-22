@@ -10,12 +10,20 @@ OKF-CLI converts documentation websites and local Markdown folders into extended
 Current AI memory systems can be broken down into three types:
 
 - **Notebook**: Built for capture, drafting, and personal connection-making. 
-  - Example: An Obsidian vault is a platonic notebook: a folder of markdown files, freeform linking, and portable. Its strengths are also its limits however. It has no structured retrieval as to perform a search you need to be a full text search. It has no referential integrity as you can link to a note that doesn't exist and Obsidian will not stop you. It has no concurrency safety so it does not support two writers or you end up with conflicts. It scales to any number of notes for _one person doing their own thinking_. As soon as multiple parties and writes occur, it falters.
-- **Database**: Engineered for large-scale, multi-user, precision retrieval. These are commonly vector stores (like Pinecone or Milvus) and relational databases (like PostgreSQL). They can scale to millions of items, support concurrent writes, provide ACID guarantees, and produce audit logs. The cost is complex setup, operational maintenance, heavy infrastructure, opaque embeddings that can mislead, and a deployment story that does not look anywhere as simple as a "drop these files in a folder" situation.
+  - Example: 
+    - An Obsidian vault is a platonic notebook: a folder of markdown files, freeform linking, and portable. Its strengths are also its limits however. It has no structured retrieval as to perform a search you need to be a full text search. It has no referential integrity as you can link to a note that doesn't exist and Obsidian will not stop you. It has no concurrency safety so it does not support two writers or you end up with conflicts. It scales to any number of notes for _one person doing their own thinking_. As soon as multiple parties and writes occur, it falters.
+- **Database**: Engineered for large-scale, multi-user, precision retrieval. 
+  - These are commonly vector stores (like Pinecone or Milvus) and relational databases (like PostgreSQL). 
+  - They can scale to millions of items, support concurrent writes, provide ACID guarantees, and produce audit logs. 
+  - The cost is complex setup, operational maintenance, heavy infrastructure, opaque embeddings that can mislead, and a deployment story that does not look anywhere as simple as a "drop these files in a folder" situation.
 
 There needs to be a middle ground that can serve most functions without the extremes of both ends.
-- A **filing cabinet** is a notebook with a structured layer on top. The cabinet's drawers: the file folders, the labels, the sorting rules, etc., these are not the documents themselves. They are a navigation system that makes the documents findable without reading all of them. In the vault concept, this means frontmatter conventions, summary callouts, an index file, a backlinking discipline, and an agent loop that maintains all of that. The strengths are summary-first navigation, traceable answers, and no vector infrastructure. 
-  - The limits are real too though as at a scale of up to about 100 articles and roughly 400,000 words, any LLM's ability to navigate via summaries and index pages appears sufficient and the overhead and complexity of a full RAG stack would likely introduce more latency and retrieval noise than it removes. But past that ceiling, summary navigation starts producing noise faster than it removes it. A RAG search and retrieval system becomes less an additional burden and more of a requirement.
+
+- **filing cabinet**: A notebook with a structured layer on top. 
+  - The cabinet's drawers: the file folders, the labels, the sorting rules, etc. 
+    - These are not the documents themselves. They are a navigation system that makes the documents findable without reading all of them. In the vault concept, this means frontmatter conventions, summary callouts, an index file, a backlinking discipline, and an agent loop that maintains all of that. The strengths are summary-first navigation, traceable answers, and no vector infrastructure. 
+  - The limits are real too:
+    - At a scale of up to about 100 articles and roughly 400,000 words, any LLM's ability to navigate via summaries and index pages appears sufficient and the overhead and complexity of a full RAG stack would likely introduce more latency and retrieval noise than it removes. But past that ceiling, summary navigation starts producing noise faster than it removes it. A RAG search and retrieval system becomes less an additional burden and more of a requirement.
 
 ## The Filing Cabinet Architecture
 
@@ -49,6 +57,14 @@ git clone https://github.com/chasedputnam/okf-cli.git
 cd okf-cli
 make build
 ```
+
+### Apple Intelligence (optional)
+
+On macOS 26 Tahoe with Apple Silicon, okf-cli can summarize directly through
+Apple's on-device Foundation Models. The provider is opt-in via the `applefm`
+build tag and requires a one-time Swift shim compilation. See
+[docs/APPLE_INTELLIGENCE.md](docs/APPLE_INTELLIGENCE.md) for the build
+workflow.
 
 ## Quick Start
 
@@ -173,6 +189,12 @@ Options:
 - `--include` - Include patterns
 - `--exclude` - Exclude patterns
 - `--force` - Overwrite output directory
+- `--summarize` - Summarization mode: `extractive` (default) or `llm`
+- `--summarize-algorithm` - Extractive algorithm: `lsa` (default), `lexrank`, `textrank`, `luhn`, `edmundson`, `sumbasic`, `kl`, `reduction`, `random`
+- `--language` - Stemmer language: `english` (default), `french`, `spanish`, `russian`, `swedish`, `norwegian`, `hungarian`
+- `--edmundson-config` - Path to `edmundson.config` YAML (only used when `--summarize-algorithm=edmundson`)
+
+See [Summarization](#summarization) for what each mode and algorithm does, and how to configure LLM providers.
 
 ### `okf-cli validate <bundle>`
 
@@ -242,6 +264,12 @@ Options:
 - `--concurrency` - Fetch concurrency, for URL sources (default: 4)
 - `--include` - Include patterns
 - `--exclude` - Exclude patterns
+- `--summarize` - Override the summarization mode stored in the changelog
+- `--summarize-algorithm` - Override the extractive algorithm stored in the changelog
+- `--language` - Override the language stored in the changelog
+- `--edmundson-config` - Path to `edmundson.config` YAML
+
+When omitted, summarization flags default to whatever was last recorded in the bundle's changelog. Overrides on `update` apply for that run only and are not persisted to the changelog header.
 
 Example workflow:
 ```bash
@@ -433,10 +461,73 @@ Each concept should have a summary callout after the title:
 > A 1-2 sentence summary (max 200 characters) for navigation.
 ```
 
-Summaries are auto-generated during `crawl` and `import` from:
-1. Meta description (if present in source)
-2. First meaningful paragraph
-3. Document title (fallback)
+Summaries are auto-generated during `crawl` and `import` by the configured summarizer (see [Summarization](#summarization)). The default is extractive LSA over the document body; LLM mode and other extractive algorithms are available via flags.
+
+## Summarization
+
+Every concept in a bundle gets a `> [!summary]` callout. The summary is what makes the index inline-readable and what powers most of the filing-cabinet's token efficiency. okf-cli supports two summarization modes, selected per bundle by `--summarize` on `import`:
+
+| Mode | Source | When to use |
+|------|--------|-------------|
+| `extractive` (default) | Embedded Go port of [sumy](https://github.com/miso-belica/sumy) — no network, fully deterministic | Default for most bundles; fast, offline, reproducible |
+| `llm` | External API, Apple Intelligence, or local Ollama (see provider stack below) | When you want generative single-sentence summaries that handle link-heavy or noisy documents better |
+
+### Extractive algorithms
+
+Selected with `--summarize-algorithm` on `import`. Defaults to `lsa`.
+
+| Algorithm | What it does |
+|-----------|--------------|
+| `lsa` (default) | Latent Semantic Analysis; SVD over the term-sentence matrix. Good general purpose. |
+| `lexrank` | PageRank over an IDF-modified-cosine sentence graph. Robust on technical prose. |
+| `textrank` | PageRank over a shared-word sentence graph. Cheaper than LexRank, similar quality. |
+| `luhn` | Significant-word clusters. Strong for cue-heavy documents (headers, definitions). |
+| `edmundson` | Cue + key + title + location heuristic. Tunable via `edmundson.config`. |
+| `sumbasic` | Greedy word-probability with redundancy downweighting. |
+| `kl` | KL-divergence minimization between summary and document distributions. |
+| `reduction` | Sum of pairwise shared-word counts. Cheap baseline. |
+| `random` | Time-seeded random sentence pick. Useful as a control. |
+
+### Languages
+
+`--language` configures stemming for the extractive pipeline. Supported: `english` (default), `french`, `spanish`, `russian`, `swedish`, `norwegian`, `hungarian`. Stopword filtering is currently English-only; non-English bundles still get tokenization, stemming, and scoring, but lose the stopword filter.
+
+### LLM mode
+
+When `--summarize=llm` is passed, okf-cli walks a provider stack and uses the first one that is available:
+
+1. **External OpenAI-compatible API** — used when `api_endpoint` and `api_token` are set in `llm.config`. Honors `Retry-After` on 429s and retries 5xx with exponential backoff.
+2. **Platform-native on-device LLM** — Apple Intelligence on macOS 26 Tahoe + Apple Silicon (opt-in `applefm` build tag, see [docs/APPLE_INTELLIGENCE.md](docs/APPLE_INTELLIGENCE.md)); Windows Copilot Runtime stub.
+3. **Local Ollama** — `http://localhost:11434` by default, model `phi3:mini`.
+4. **Extractive fallback** — if none of the above are reachable, the engine falls back to the extractive summarizer so the import never fails because the LLM was offline.
+
+Configuration lives in `llm.config` (YAML), searched in this order: `<bundle>/llm.config`, then `~/.config/okf-cli/llm.config`.
+
+```yaml
+# Use an external OpenAI-compatible endpoint
+api_endpoint: https://api.openai.com/v1/chat/completions
+api_token: sk-...
+model: gpt-4o-mini
+
+# Or point local fallback at a custom Ollama
+local_endpoint: http://localhost:11434
+local_model: phi3:mini
+
+# Optional: override the prompt
+prompt_template: |
+  Summarize the following document in one concise sentence (max 200 characters).
+  Title: {{.Title}}
+  Content:
+  {{.Content}}
+```
+
+Document content is intelligently truncated to a ~8000-token budget before being sent to the LLM: headings and first paragraphs are kept preferentially over body noise, with a hard token-level fallback if even the heading-only reduction overflows.
+
+### Apple Intelligence (macOS 26 Tahoe)
+
+On Apple Silicon Macs running macOS 26 Tahoe with Apple Intelligence enabled, okf-cli can call Foundation Models directly through an in-process CGo bridge — no HTTP server, no API key, no token leaves the device. This is opt-in via the `applefm` build tag so default builds keep working on Intel Macs, older macOS, Linux, and Windows. See [docs/APPLE_INTELLIGENCE.md](docs/APPLE_INTELLIGENCE.md) for the build workflow.
+
+When the bridge is built and available, `llm` mode automatically prefers Apple Intelligence over the Ollama fallback (the external `api_endpoint`, if configured, still wins — handy for A/B comparisons against cloud models).
 
 ## Scale Ceiling & RAG Graduation
 
@@ -472,6 +563,58 @@ make build-all
 # Run demo
 make demo
 ```
+
+## End-to-end pipeline
+
+`internal/summarize/summarizer.go` dispatches on `--summarize` to one of two pipelines:
+
+```
+Raw bytes (markdown / HTML / text)
+   │
+   ▼
+nlp.Parser.Parse(text) ─── stripMarkdownArtifacts → splitParagraphs → tokenize → Document
+   │                       (frontmatter, code fences, callouts, links, bold/italic, etc.)
+   ▼
+            ┌────────────── mode = extractive (default) ──────────────┐
+            │                                                          │
+            ▼                                                          │
+sumer.NewSummarizer(algo, lang) → Summarizer                          │
+   │                                                                   │
+   ▼                                                                   │
+summarizer.Summarize(doc, sentenceCount=1) → []*nlp.Sentence          │
+   │           ↑                                                       │
+   │           └─ algorithm-specific scoring (LSA, LexRank, ...)       │
+   ▼                                                                   │
+Base.GetBestSentences ── stable sort by rating desc, then re-sort      │
+   │                     selected into document order                  │
+   ▼                                                                   │
+ExtractiveAdapter trims to MaxSummaryLength, returns Summary{Text}     │
+   │                                                                   │
+   │            ┌─────────────── mode = llm ──────────────┐            │
+   │            ▼                                          │            │
+   │   llm.Engine.Summarize(content, title)               │            │
+   │            │                                          │            │
+   │            ▼                                          │            │
+   │   intelligentTruncate to ~8000 tokens                │            │
+   │   (headings + first paras kept preferentially)       │            │
+   │            │                                          │            │
+   │            ▼                                          │            │
+   │   selectProvider →  api → apple → ollama             │            │
+   │            │              (Apple Foundation Models    │            │
+   │            │               on macOS 26 + applefm tag) │            │
+   │            ▼                                          │            │
+   │   provider.Generate(ctx, prompt)                     │            │
+   │            │                                          │            │
+   │            ▼                                          │            │
+   │   if err → fall back to extractive ──────────────────┘            │
+   │                                                                   │
+   └────────────────────────────────┬──────────────────────────────────┘
+                                    ▼
+              writer.injectSummaryCallout writes
+              `> [!summary]` block into the rendered .md file
+```
+
+The extractive path always requests **one** sentence because the OKF summary callout is a single line. The LLM path wraps a single-sentence prompt template; if the configured provider is unavailable or fails, the engine silently falls back to extractive so an import never fails because the LLM was offline.
 
 ## License
 

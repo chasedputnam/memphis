@@ -33,12 +33,33 @@ type UpdateOptions struct {
 	MaxDepth    int // for crawl
 	Concurrency int // for crawl
 
+	// Summarization preferences (overrides stored changelog settings if the
+	// corresponding *FlagSet is true).
+	SummarizeMode             string
+	SummarizeAlgorithm        string
+	Language                  string
+	EdmundsonConfigPath       string
+	SummarizeModeFlagSet      bool
+	SummarizeAlgorithmFlagSet bool
+	LanguageFlagSet           bool
+
 	// Callback for prompting user about changes
 	// Returns: apply (apply this change), applyAll (apply all remaining), cancel (cancel update)
 	OnPrompt func(changeType differ.ChangeType, files []differ.FileChange) (apply bool, applyAll bool, cancel bool)
 
-	// Callback for progress updates
+	// OnProgress is the phase-based progress callback (fetching, diffing,
+	// applying, backlinks, warning).
 	OnProgress func(phase string, message string)
+
+	// OnSummarizeProgress is invoked once per file that gets summarized
+	// during the apply phase (additions + modifications). Mirrors the
+	// importer's per-file callback so the CLI can render a stream of
+	// "summarizing N/M" updates.
+	OnSummarizeProgress func(index, total int, path string)
+
+	// OnSummarizeWarning is invoked when a summary falls back to the legacy
+	// heuristic or fails entirely. Mirrors the importer's warning hook.
+	OnSummarizeWarning func(path, message string)
 }
 
 // UpdateResult contains the result of an update operation.
@@ -51,6 +72,11 @@ type UpdateResult struct {
 	AddedFiles    []string
 	ModifiedFiles []string
 	DeletedFiles  []string
+
+	// Stats reports per-source summarization counts, fallbacks, and
+	// failures for the files written during this update (additions +
+	// modifications). Nil when no files were rewritten or in dry-run mode.
+	Stats *types.SummaryStats
 }
 
 // isURL checks if a string looks like a URL.
@@ -65,13 +91,28 @@ func Update(ctx context.Context, opts UpdateOptions) (*UpdateResult, error) {
 		return nil, fmt.Errorf("bundle not found: %s", opts.BundlePath)
 	}
 
+	// Read changelog for source and summarization preferences.
+	cl, clErr := changelog.ReadChangelog(opts.BundlePath)
+
 	// Determine source
 	source := opts.Source
 	if source == "" {
-		var err error
-		source, err = changelog.GetSource(opts.BundlePath)
-		if err != nil {
-			return nil, fmt.Errorf("no source specified and %v. Use --source to specify the source location", err)
+		if clErr != nil {
+			return nil, fmt.Errorf("no source specified and %v. Use --source to specify the source location", clErr)
+		}
+		source = cl.Source
+	}
+
+	// Merge changelog summarization preferences with CLI overrides.
+	if cl != nil {
+		if !opts.SummarizeModeFlagSet && opts.SummarizeMode == "" {
+			opts.SummarizeMode = cl.SummarizeMode
+		}
+		if !opts.SummarizeAlgorithmFlagSet && opts.SummarizeAlgorithm == "" {
+			opts.SummarizeAlgorithm = cl.SummarizeAlgorithm
+		}
+		if !opts.LanguageFlagSet && opts.Language == "" {
+			opts.Language = cl.Language
 		}
 	}
 
@@ -134,13 +175,28 @@ func Update(ctx context.Context, opts UpdateOptions) (*UpdateResult, error) {
 
 	result := &UpdateResult{}
 
+	// Build a stats accumulator covering every file we (re)write during
+	// this update. Total tracks files actually rewritten, so it's
+	// incremented per successful applyAdd/applyModify below.
+	stats := &types.SummaryStats{BySource: map[string]int{}}
+
+	// Total files to summarize during this update (additions + modifications).
+	// Used to drive the per-file progress callback. Skipped/cancelled files
+	// will reduce the actually-summarized count below.
+	summarizeTotal := len(diffResult.Added) + len(diffResult.Modified)
+	summarizeIndex := 0
+
 	// Process additions (always apply without prompting)
 	if len(diffResult.Added) > 0 {
 		if opts.OnProgress != nil {
 			opts.OnProgress("applying", fmt.Sprintf("Adding %d new files", len(diffResult.Added)))
 		}
 		for _, change := range diffResult.Added {
-			if err := applyAdd(opts.BundlePath, change, newDocs); err != nil {
+			summarizeIndex++
+			if opts.OnSummarizeProgress != nil {
+				opts.OnSummarizeProgress(summarizeIndex, summarizeTotal, change.Path)
+			}
+			if err := applyAdd(opts.BundlePath, change, newDocs, opts, stats); err != nil {
 				return nil, err
 			}
 			result.Added++
@@ -155,6 +211,7 @@ func Update(ctx context.Context, opts UpdateOptions) (*UpdateResult, error) {
 			if !applyAll && opts.OnPrompt != nil {
 				apply, all, cancel := opts.OnPrompt(differ.ChangeModified, []differ.FileChange{change})
 				if cancel {
+					result.Stats = finalizeStats(stats)
 					return result, nil
 				}
 				if all {
@@ -165,7 +222,11 @@ func Update(ctx context.Context, opts UpdateOptions) (*UpdateResult, error) {
 					continue
 				}
 			}
-			if err := applyModify(opts.BundlePath, change, newDocs); err != nil {
+			summarizeIndex++
+			if opts.OnSummarizeProgress != nil {
+				opts.OnSummarizeProgress(summarizeIndex, summarizeTotal, change.Path)
+			}
+			if err := applyModify(opts.BundlePath, change, newDocs, opts, stats); err != nil {
 				return nil, err
 			}
 			result.Modified++
@@ -180,6 +241,7 @@ func Update(ctx context.Context, opts UpdateOptions) (*UpdateResult, error) {
 			if !applyAll && opts.OnPrompt != nil {
 				apply, all, cancel := opts.OnPrompt(differ.ChangeDeleted, []differ.FileChange{change})
 				if cancel {
+					result.Stats = finalizeStats(stats)
 					return result, nil
 				}
 				if all {
@@ -219,7 +281,17 @@ func Update(ctx context.Context, opts UpdateOptions) (*UpdateResult, error) {
 		}
 	}
 
+	result.Stats = finalizeStats(stats)
 	return result, nil
+}
+
+// finalizeStats returns the accumulated stats, or nil when no files were
+// summarized (so callers can render a clean no-op summary).
+func finalizeStats(stats *types.SummaryStats) *types.SummaryStats {
+	if stats == nil || stats.Total == 0 {
+		return nil
+	}
+	return stats
 }
 
 // fetchFromURL fetches content from a URL using the crawler.
@@ -319,7 +391,7 @@ func assignOutputPaths(docs []types.NormalizedDocument) {
 }
 
 // applyAdd adds a new file to the bundle.
-func applyAdd(bundlePath string, change differ.FileChange, newDocs []types.NormalizedDocument) error {
+func applyAdd(bundlePath string, change differ.FileChange, newDocs []types.NormalizedDocument, opts UpdateOptions, stats *types.SummaryStats) error {
 	doc := findDoc(newDocs, change.Path)
 	if doc == nil {
 		return fmt.Errorf("document not found for path: %s", change.Path)
@@ -330,19 +402,19 @@ func applyAdd(bundlePath string, change differ.FileChange, newDocs []types.Norma
 		return err
 	}
 
-	content := generateContent(*doc)
+	content := generateContent(*doc, opts, stats)
 	return os.WriteFile(outPath, []byte(content), 0644)
 }
 
 // applyModify modifies an existing file in the bundle.
-func applyModify(bundlePath string, change differ.FileChange, newDocs []types.NormalizedDocument) error {
+func applyModify(bundlePath string, change differ.FileChange, newDocs []types.NormalizedDocument, opts UpdateOptions, stats *types.SummaryStats) error {
 	doc := findDoc(newDocs, change.Path)
 	if doc == nil {
 		return fmt.Errorf("document not found for path: %s", change.Path)
 	}
 
 	outPath := filepath.Join(bundlePath, change.Path)
-	content := generateContent(*doc)
+	content := generateContent(*doc, opts, stats)
 	return os.WriteFile(outPath, []byte(content), 0644)
 }
 
@@ -379,26 +451,116 @@ func findDoc(docs []types.NormalizedDocument, path string) *types.NormalizedDocu
 	return nil
 }
 
-// generateContent generates the full markdown content with frontmatter and summary callout.
-func generateContent(doc types.NormalizedDocument) string {
+// generateContent generates the full markdown content with frontmatter and
+// summary callout. stats is updated as a side effect: Total is always
+// incremented, BySource gets the source that actually produced the summary,
+// and Fallbacks/Failed are incremented when the configured summarizer fails
+// or the LLM mode silently falls through.
+func generateContent(doc types.NormalizedDocument, opts UpdateOptions, stats *types.SummaryStats) string {
 	timestamp := time.Now().UTC().Format(time.RFC3339)
-	
-	// Generate summary from document content
+
+	// Resolve summarization configuration.
+	mode := opts.SummarizeMode
+	if mode == "" {
+		mode = string(summarize.DefaultMode)
+	}
+	algo := opts.SummarizeAlgorithm
+	if algo == "" {
+		algo = summarize.DefaultAlgorithm
+	}
+	lang := opts.Language
+	if lang == "" {
+		lang = summarize.DefaultLanguage
+	}
+
+	// Build summary using the configured summarizer, falling back to the
+	// legacy heuristic on failure.
 	description := normalize.DescriptionFromMarkdown(doc.Markdown)
-	sum := summarize.Extract(description, doc.Markdown, doc.Title)
-	
+	sum := generateSummary(opts.BundlePath, mode, algo, lang, opts.EdmundsonConfigPath, doc, description, stats, opts.OnSummarizeWarning)
+
 	// Build markdown with title
 	markdown := writer.WithTitle(doc.Title, doc.Markdown)
-	
+
 	// Inject summary callout after title
 	if sum.Text != "" {
 		callout := summarize.FormatCallout(sum)
 		markdown = injectSummaryCallout(markdown, callout)
 	}
-	
+
 	// Generate frontmatter (backlinks handled separately in regenerateBacklinks)
 	fm := writer.GenerateFrontmatter(doc, timestamp)
 	return fm + markdown
+}
+
+// generateSummary runs the configured Summarizer, falling back to the legacy
+// heuristic extractor if anything fails. stats is mutated to record what
+// actually happened. onWarn is invoked on fallback or failure (may be nil).
+func generateSummary(
+	bundlePath, mode, algo, lang, edmundsonPath string,
+	doc types.NormalizedDocument,
+	description string,
+	stats *types.SummaryStats,
+	onWarn func(path, message string),
+) summarize.Summary {
+	stats.Total++
+
+	record := func(sum summarize.Summary) summarize.Summary {
+		if sum.Source != "" {
+			stats.BySource[sum.Source]++
+		}
+		return sum
+	}
+
+	s, err := summarize.NewSummarizer(summarize.Config{
+		Mode:                summarize.Mode(mode),
+		Algorithm:           algo,
+		Language:            lang,
+		BundlePath:          bundlePath,
+		EdmundsonConfigPath: edmundsonPath,
+	})
+	if err != nil || s == nil {
+		stats.Fallbacks++
+		sum := summarize.Extract(description, doc.Markdown, doc.Title)
+		if sum.Source == summarize.SourceNone {
+			stats.Failed++
+			if onWarn != nil {
+				onWarn(doc.OutputPath, "no summary could be generated")
+			}
+		} else if onWarn != nil && err != nil {
+			onWarn(doc.OutputPath, fmt.Sprintf("summarizer init failed, used heuristic: %v", err))
+		}
+		return record(sum)
+	}
+
+	sum, err := s.Summarize(doc.Markdown, doc.Title)
+	if err != nil || sum.Text == "" {
+		fallback := summarize.Extract(description, doc.Markdown, doc.Title)
+		stats.Fallbacks++
+		if fallback.Source == summarize.SourceNone {
+			stats.Failed++
+			if onWarn != nil {
+				if err != nil {
+					onWarn(doc.OutputPath, fmt.Sprintf("summarization failed: %v", err))
+				} else {
+					onWarn(doc.OutputPath, "no summary could be generated")
+				}
+			}
+		} else if onWarn != nil && err != nil {
+			onWarn(doc.OutputPath, fmt.Sprintf("fell back to heuristic: %v", err))
+		}
+		return record(fallback)
+	}
+
+	// If the user asked for LLM mode but a non-LLM source came back, the
+	// LLM summarizer internally fell back to extractive — count it as a
+	// fallback so stats reflect what actually happened.
+	if mode == string(summarize.ModeLLM) && sum.Source != "llm" {
+		stats.Fallbacks++
+		if onWarn != nil {
+			onWarn(doc.OutputPath, fmt.Sprintf("LLM unavailable, fell back to %s", sum.Source))
+		}
+	}
+	return record(sum)
 }
 
 // injectSummaryCallout inserts a summary callout after the first heading.
