@@ -2,9 +2,22 @@
 
 OKF-CLI converts documentation websites and local Markdown folders into extended Open Knowledge Format (OKF) bundles. These bundles implement a filing cabinet concept architecture pattern for AI agents, providing durable structured artifacts with summary-first navigation that scales sublinearly with corpus size.
 
+## Why?
+Current AI memory systems can be broken down into three types:
+
+- **Notebook**: Built for capture, drafting, and personal connection-making. 
+  - Example: An Obsidian vault is a platonic notebook: a folder of markdown files, freeform linking, and portable. Its strengths are also its limits however. It has no structured retrieval as to perform a search you need to be a full text search. It has no referential integrity as you can link to a note that doesn't exist and Obsidian will not stop you. It has no concurrency safety so it does not support two writers or you end up with conflicts. It scales to any number of notes for _one person doing their own thinking_. As soon as multiple parties and writes occur, it falters.
+- **Database**: Engineered for large-scale, multi-user, precision retrieval. These are commonly vector stores (like Pinecone or Milvus) and relational databases (like PostgreSQL). They can scale to millions of items, support concurrent writes, provide ACID guarantees, and produce audit logs. The cost is complex setup, operational maintenance, heavy infrastructure, opaque embeddings that can mislead, and a deployment story that does not look anywhere as simple as a "drop these files in a folder" situation.
+
+There needs to be a middle ground that can serve most functions without the extremes of both ends.
+- A **filing cabinet** is a notebook with a structured layer on top. The cabinet's drawers: the file folders, the labels, the sorting rules, etc., these are not the documents themselves. They are a navigation system that makes the documents findable without reading all of them. In the vault concept, this means frontmatter conventions, summary callouts, an index file, a backlinking discipline, and an agent loop that maintains all of that. The strengths are summary-first navigation, traceable answers, and no vector infrastructure. 
+  - The limits are real too though as at a scale of up to about 100 articles and roughly 400,000 words, any LLM's ability to navigate via summaries and index pages appears sufficient and the overhead and complexity of a full RAG stack would likely introduce more latency and retrieval noise than it removes. But past that ceiling, summary navigation starts producing noise faster than it removes it. A RAG search and retrieval system becomes less an additional burden and more of a requirement.
+
 ## The Filing Cabinet Architecture
 
-OKF bundles are designed as a "filing cabinet" for AI agents - a persistent, structured knowledge store that lives outside the context window. Key properties:
+Open Knowledge Format knowledge bundles [https://openknowledgeformat.com/what-is-okf] are designed to be a 'human and agent' readable bundle of Markdown files with YAML frontmatter. People can author it, agents can generate it, and tools can exchange it without a central registry or proprietary SDK.
+
+OKF bundles can be extended to provide functionality as a "filing cabinet" for AI agents - a persistent, structured knowledge store that lives outside the context window. Key properties:
 
 - **Summary-first navigation**: Each concept has a summary callout, and the index provides inline summaries so agents can decide what to read without paying full token cost
 - **Bidirectional backlinks**: Concepts track both outbound links and backlinks in frontmatter, enabling graph traversal
