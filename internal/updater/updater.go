@@ -560,9 +560,8 @@ func parseBundleConcept(path, content string) bundleConcept {
 				} else if strings.HasPrefix(line, "type:") {
 					c.docType = strings.TrimSpace(strings.TrimPrefix(line, "type:"))
 					c.docType = strings.Trim(c.docType, "\"")
-				} else if strings.HasPrefix(line, "  - ") && len(c.tags) < 10 {
-					// Could be tags or backlinks, handled separately
 				}
+				// Note: "  - " lines could be tags or backlinks, parsed separately below
 			}
 
 			// Parse backlinks array
@@ -778,13 +777,13 @@ func regenerateIndexFiles(bundlePath string, conceptsByDir map[string][]indexEnt
 		if dir == "." {
 			content.WriteString("---\n")
 			content.WriteString("okf_version: \"0.1\"\n")
-			content.WriteString(fmt.Sprintf("total_concepts: %d\n", totalConcepts))
-			content.WriteString(fmt.Sprintf("generated: %s\n", timestamp))
+			_, _ = fmt.Fprintf(&content, "total_concepts: %d\n", totalConcepts)
+			_, _ = fmt.Fprintf(&content, "generated: %s\n", timestamp)
 			content.WriteString("---\n\n")
 		}
 
 		// Determine title
-		title := "Index"
+		var title string
 		if dir == "." {
 			title = filepath.Base(bundlePath)
 		} else {
@@ -792,7 +791,7 @@ func regenerateIndexFiles(bundlePath string, conceptsByDir map[string][]indexEnt
 		}
 
 		content.WriteString("# " + title + "\n\n")
-		content.WriteString(fmt.Sprintf("## Concepts (%d)\n\n", len(entries)))
+		_, _ = fmt.Fprintf(&content, "## Concepts (%d)\n\n", len(entries))
 
 		for _, entry := range entries {
 			relLink := filepath.Base(entry.path)

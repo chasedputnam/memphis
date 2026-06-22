@@ -27,11 +27,11 @@ func TestAnalyze_SmallBundle(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create 10 small concepts
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		content := "---\ntype: Guide\n---\n\nSome content here."
 		path := filepath.Join(dir, "concepts", "concept-"+string(rune('a'+i))+".md")
-		os.MkdirAll(filepath.Dir(path), 0755)
-		os.WriteFile(path, []byte(content), 0644)
+		_ = os.MkdirAll(filepath.Dir(path), 0755)
+		_ = os.WriteFile(path, []byte(content), 0644)
 	}
 
 	metrics, ceiling, err := Analyze(dir)
@@ -51,11 +51,11 @@ func TestAnalyze_WarningThreshold(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create 101 concepts to trigger warning
-	for i := 0; i < 101; i++ {
+	for i := range 101 {
 		content := "---\ntype: Guide\n---\n\nSome content here."
 		path := filepath.Join(dir, "concepts", "concept-"+string(rune('a'+i%26))+"-"+string(rune('0'+i/26))+".md")
-		os.MkdirAll(filepath.Dir(path), 0755)
-		os.WriteFile(path, []byte(content), 0644)
+		_ = os.MkdirAll(filepath.Dir(path), 0755)
+		_ = os.WriteFile(path, []byte(content), 0644)
 	}
 
 	metrics, ceiling, err := Analyze(dir)
@@ -75,12 +75,12 @@ func TestAnalyze_ExceededThreshold(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create 151 concepts to trigger exceeded
-	for i := 0; i < 151; i++ {
+	for i := range 151 {
 		content := "---\ntype: Guide\n---\n\nSome content here."
 		name := "concept-" + string(rune('a'+i%26)) + "-" + string(rune('a'+i/26%26)) + ".md"
 		path := filepath.Join(dir, "concepts", name)
-		os.MkdirAll(filepath.Dir(path), 0755)
-		os.WriteFile(path, []byte(content), 0644)
+		_ = os.MkdirAll(filepath.Dir(path), 0755)
+		_ = os.WriteFile(path, []byte(content), 0644)
 	}
 
 	metrics, ceiling, err := Analyze(dir)
@@ -102,10 +102,10 @@ func TestAnalyze_TokenThreshold(t *testing.T) {
 	// Create a few concepts with lots of content to exceed token threshold
 	// ~400K tokens ≈ 1.6M characters at 4 chars/token
 	largeContent := "---\ntype: Guide\n---\n\n" + strings.Repeat("word ", 100000)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		path := filepath.Join(dir, "concepts", "large-"+string(rune('a'+i))+".md")
-		os.MkdirAll(filepath.Dir(path), 0755)
-		os.WriteFile(path, []byte(largeContent), 0644)
+		_ = os.MkdirAll(filepath.Dir(path), 0755)
+		_ = os.WriteFile(path, []byte(largeContent), 0644)
 	}
 
 	metrics, ceiling, err := Analyze(dir)
@@ -122,12 +122,12 @@ func TestAnalyze_SkipsIndexAndLog(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create index.md and log.md (should be skipped)
-	os.WriteFile(filepath.Join(dir, "index.md"), []byte("# Index"), 0644)
-	os.WriteFile(filepath.Join(dir, "log.md"), []byte("# Log"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "index.md"), []byte("# Index"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "log.md"), []byte("# Log"), 0644)
 
 	// Create one real concept
-	os.MkdirAll(filepath.Join(dir, "concepts"), 0755)
-	os.WriteFile(filepath.Join(dir, "concepts", "test.md"), []byte("---\ntype: Guide\n---\n"), 0644)
+	_ = os.MkdirAll(filepath.Join(dir, "concepts"), 0755)
+	_ = os.WriteFile(filepath.Join(dir, "concepts", "test.md"), []byte("---\ntype: Guide\n---\n"), 0644)
 
 	metrics, _, err := Analyze(dir)
 	if err != nil {
@@ -144,12 +144,12 @@ func TestAnalyze_IndexTokens(t *testing.T) {
 
 	// Create index with some content
 	indexContent := "---\nokf_version: \"0.1\"\n---\n# Bundle\n\n- [[concepts/a]]\n- [[concepts/b]]"
-	os.WriteFile(filepath.Join(dir, "index.md"), []byte(indexContent), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "index.md"), []byte(indexContent), 0644)
 
 	// Create concepts
-	os.MkdirAll(filepath.Join(dir, "concepts"), 0755)
-	os.WriteFile(filepath.Join(dir, "concepts", "a.md"), []byte("---\ntype: Guide\n---\nContent A"), 0644)
-	os.WriteFile(filepath.Join(dir, "concepts", "b.md"), []byte("---\ntype: Guide\n---\nContent B"), 0644)
+	_ = os.MkdirAll(filepath.Join(dir, "concepts"), 0755)
+	_ = os.WriteFile(filepath.Join(dir, "concepts", "a.md"), []byte("---\ntype: Guide\n---\nContent A"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "concepts", "b.md"), []byte("---\ntype: Guide\n---\nContent B"), 0644)
 
 	metrics, _, err := Analyze(dir)
 	if err != nil {
