@@ -148,8 +148,17 @@ type CrawlResult struct {
 	DryRunPages  []string
 }
 
+// SummaryStats reports how many files were summarized and by which source.
+type SummaryStats struct {
+	Total     int
+	BySource  map[string]int
+	Fallbacks int
+	Failed    int
+}
+
 // ImportResult is the result of an import operation.
 type ImportResult struct {
 	Written   []string
 	Documents []NormalizedDocument
+	Stats     *SummaryStats
 }

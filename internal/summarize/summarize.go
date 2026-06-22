@@ -112,6 +112,69 @@ func HasCallout(body string) bool {
 	return strings.Contains(body, "> [!summary]")
 }
 
+// StripCallout returns body with the first `> [!summary]` callout block
+// removed, including the blank line that conventionally follows it. The
+// callout is identified by a `> [!summary]` line followed by zero or more
+// `>`-prefixed continuation lines. This is the inverse of the injection done
+// by writer/updater and is used by the differ to compare bundle content
+// against source content on equal footing.
+//
+// Bodies without a callout are returned unchanged.
+func StripCallout(body string) string {
+	idx := strings.Index(body, "> [!summary]")
+	if idx < 0 {
+		return body
+	}
+	// Find the line start for idx.
+	start := idx
+	if nl := strings.LastIndex(body[:idx], "\n"); nl >= 0 {
+		start = nl + 1
+	} else {
+		start = 0
+	}
+	// Walk forward over the callout's `>`-prefixed lines.
+	end := idx
+	for end < len(body) {
+		nl := strings.Index(body[end:], "\n")
+		var lineEnd int
+		if nl < 0 {
+			lineEnd = len(body)
+		} else {
+			lineEnd = end + nl
+		}
+		line := strings.TrimSpace(body[end:lineEnd])
+		if strings.HasPrefix(line, ">") || end == idx {
+			if nl < 0 {
+				end = len(body)
+				break
+			}
+			end = lineEnd + 1
+			continue
+		}
+		break
+	}
+	// Also consume a single trailing blank line that conventionally
+	// follows the callout (we insert `\n\n` after the callout, so the
+	// post-strip body would otherwise have a stray blank).
+	if end < len(body) {
+		nl := strings.Index(body[end:], "\n")
+		var lineEnd int
+		if nl < 0 {
+			lineEnd = len(body)
+		} else {
+			lineEnd = end + nl
+		}
+		if strings.TrimSpace(body[end:lineEnd]) == "" {
+			if nl < 0 {
+				end = len(body)
+			} else {
+				end = lineEnd + 1
+			}
+		}
+	}
+	return body[:start] + body[end:]
+}
+
 // extractFirstParagraph extracts the first meaningful paragraph from markdown.
 // Skips headings, code blocks, frontmatter, and empty lines.
 func extractFirstParagraph(markdown string) string {

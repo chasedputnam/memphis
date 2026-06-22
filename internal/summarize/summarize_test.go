@@ -206,6 +206,53 @@ func TestHasCallout(t *testing.T) {
 	}
 }
 
+func TestStripCallout(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "no callout passes through unchanged",
+			in:   "# Title\n\nBody text here.\n",
+			want: "# Title\n\nBody text here.\n",
+		},
+		{
+			name: "removes callout injected after heading",
+			in:   "# Title\n\n> [!summary]\n> Summary text.\n\nBody text here.\n",
+			want: "# Title\n\nBody text here.\n",
+		},
+		{
+			name: "multi-line callout body is fully removed",
+			in:   "# T\n\n> [!summary]\n> Line one.\n> Line two.\n\nBody.\n",
+			want: "# T\n\nBody.\n",
+		},
+		{
+			name: "callout at end of file with no trailing blank",
+			in:   "# T\n\n> [!summary]\n> Trailing.",
+			want: "# T\n\n",
+		},
+		{
+			name: "leaves later blockquotes intact",
+			in:   "# T\n\n> [!summary]\n> Sum.\n\nBody.\n\n> Just a quote.\n",
+			want: "# T\n\nBody.\n\n> Just a quote.\n",
+		},
+		{
+			name: "callout at top of body (no heading) is removed",
+			in:   "> [!summary]\n> Sum.\n\nBody.\n",
+			want: "Body.\n",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := StripCallout(tc.in)
+			if got != tc.want {
+				t.Errorf("StripCallout()\n  got:  %q\n  want: %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCleanMarkdown(t *testing.T) {
 	tests := []struct {
 		input    string

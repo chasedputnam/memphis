@@ -197,6 +197,52 @@ func TestAppendEntry(t *testing.T) {
 	}
 }
 
+func TestChangelog_SummarizeMetadataRoundTrip(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	err := CreateChangelogWithMetadata(tmpDir, "https://example.com/docs", 12, "llm", "lsa", "english")
+	if err != nil {
+		t.Fatalf("CreateChangelogWithMetadata: %v", err)
+	}
+
+	cl, err := ReadChangelog(tmpDir)
+	if err != nil {
+		t.Fatalf("ReadChangelog: %v", err)
+	}
+	if cl.SummarizeMode != "llm" {
+		t.Errorf("SummarizeMode = %q", cl.SummarizeMode)
+	}
+	if cl.SummarizeAlgorithm != "lsa" {
+		t.Errorf("SummarizeAlgorithm = %q", cl.SummarizeAlgorithm)
+	}
+	if cl.Language != "english" {
+		t.Errorf("Language = %q", cl.Language)
+	}
+	if len(cl.Entries) != 1 {
+		t.Errorf("expected 1 entry, got %d", len(cl.Entries))
+	}
+}
+
+func TestChangelog_MetadataIgnoredForOldFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	content := `https://docs.example.com
+2024-01-15T10:30:00Z - Initial bundle created with 42 concepts
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ChangelogFile), []byte(content), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cl, err := ReadChangelog(tmpDir)
+	if err != nil {
+		t.Fatalf("ReadChangelog: %v", err)
+	}
+	if cl.SummarizeMode != "" || cl.SummarizeAlgorithm != "" || cl.Language != "" {
+		t.Errorf("unexpected metadata on old format: %+v", cl)
+	}
+	if len(cl.Entries) != 1 {
+		t.Errorf("expected 1 entry, got %d", len(cl.Entries))
+	}
+}
+
 func TestGetSource(t *testing.T) {
 	tmpDir := t.TempDir()
 

@@ -225,6 +225,46 @@ func TestSummary(t *testing.T) {
 	}
 }
 
+// TestDiffBundlesIgnoresInjectedSummaryCallout pins the differ contract:
+// the bundle stores files with an injected `> [!summary]` callout, while
+// freshly-fetched source markdown does not. When the underlying body is
+// unchanged the diff must report 0 modified files. Before the fix, the
+// callout caused every file to appear modified on every update.
+func TestDiffBundlesIgnoresInjectedSummaryCallout(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	bundleContent := `---
+type: Concept
+title: Test
+---
+# Test
+
+> [!summary]
+> Old summary text generated at import time.
+
+Body content that has not changed.
+`
+	_ = os.WriteFile(filepath.Join(tmpDir, "test.md"), []byte(bundleContent), 0644)
+
+	// Fresh source has no callout; body is byte-identical to bundle body.
+	newDocs := []types.NormalizedDocument{
+		{OutputPath: "test.md", Markdown: "# Test\n\nBody content that has not changed.\n"},
+	}
+
+	result, err := DiffBundles(tmpDir, newDocs)
+	if err != nil {
+		t.Fatalf("DiffBundles failed: %v", err)
+	}
+
+	if len(result.Modified) != 0 {
+		t.Errorf("expected 0 modified (callout should be stripped before compare), got %d: %+v",
+			len(result.Modified), result.Modified)
+	}
+	if len(result.Added) != 0 || len(result.Deleted) != 0 {
+		t.Errorf("expected 0 added/deleted, got added=%d deleted=%d", len(result.Added), len(result.Deleted))
+	}
+}
+
 func TestStripFrontmatter(t *testing.T) {
 	tests := []struct {
 		input    string

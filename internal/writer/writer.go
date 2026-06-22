@@ -29,6 +29,28 @@ type WriteOptions struct {
 	DangerouslyAllowUnsafeOutput bool
 	Timestamp                    string
 	Source                       string // URL or file path for changelog
+	SummarizeMode                string // "extractive" | "llm"
+	SummarizeAlgorithm           string // lsa | lexrank | textrank | ...
+	Language                     string // language for summarization
+	EdmundsonConfigPath          string // optional path to edmundson.config
+	// OnProgress is invoked once per document with (index, total, source).
+	OnProgress func(index, total int, source string)
+	// OnSummarizeWarning is invoked when a summary falls back to the legacy
+	// heuristic or fails entirely. Callers can route this to stderr.
+	OnSummarizeWarning func(path, message string)
+}
+
+// SummaryStats tracks the outcome of summarization across a bundle.
+type SummaryStats struct {
+	Total      int
+	BySource   map[string]int
+	Fallbacks  int
+	Failed     int
+}
+
+// NewSummaryStats creates an empty SummaryStats.
+func NewSummaryStats() *SummaryStats {
+	return &SummaryStats{BySource: map[string]int{}}
 }
 
 // reservedFilenames are OKF reserved filenames that cannot be used for concepts.
@@ -315,6 +337,22 @@ func computeBacklinks(docs []types.NormalizedDocument, sourceToOutput map[string
 
 // WriteOKFBundle writes documents as an OKF bundle.
 func WriteOKFBundle(docs []types.NormalizedDocument, opts WriteOptions) ([]string, error) {
+	res, err := WriteOKFBundleWithStats(docs, opts)
+	if err != nil {
+		return nil, err
+	}
+	return res.Written, nil
+}
+
+// WriteResult bundles the written paths with summarization statistics.
+type WriteResult struct {
+	Written []string
+	Stats   *SummaryStats
+}
+
+// WriteOKFBundleWithStats writes documents as an OKF bundle and returns
+// summarization statistics.
+func WriteOKFBundleWithStats(docs []types.NormalizedDocument, opts WriteOptions) (*WriteResult, error) {
 	if err := ensureCleanOutDir(opts); err != nil {
 		return nil, err
 	}
@@ -328,20 +366,29 @@ func WriteOKFBundle(docs []types.NormalizedDocument, opts WriteOptions) ([]strin
 	// Compute backlinks from all outbound links
 	backlinks := computeBacklinks(docs, sourceToOutput)
 
+	// Build a summarizer based on options.
+	summarizer, summarizerErr := buildSummarizer(opts)
+
 	written := make([]string, 0, len(docs))
 	conceptsByDir := make(map[string][]writtenConcept)
 	estimator := tokens.NewEstimator()
+	stats := NewSummaryStats()
+	stats.Total = len(docs)
 
 	for i := range docs {
 		doc := &docs[i]
+
+		if opts.OnProgress != nil {
+			opts.OnProgress(i+1, len(docs), doc.OutputPath)
+		}
 
 		// Rewrite links
 		markdown := rewriteLinks(*doc, sourceToOutput)
 		markdown = WithTitle(doc.Title, markdown)
 
-		// Generate summary
+		// Generate summary using the configured summarizer.
 		description := normalize.DescriptionFromMarkdown(doc.Markdown)
-		sum := summarize.Extract(description, doc.Markdown, doc.Title)
+		sum, source := generateSummary(summarizer, summarizerErr, description, doc, stats, opts.OnSummarizeWarning, opts.SummarizeMode)
 
 		// Inject summary callout at top of body (after title)
 		markdown = injectSummaryCallout(markdown, sum)
@@ -365,6 +412,11 @@ func WriteOKFBundle(docs []types.NormalizedDocument, opts WriteOptions) ([]strin
 
 		written = append(written, doc.OutputPath)
 
+		// Update stats with the summary source actually used.
+		if source != "" {
+			stats.BySource[source]++
+		}
+
 		// Track for index generation
 		dir := path.Dir(doc.OutputPath)
 		if dir == "" {
@@ -386,14 +438,102 @@ func WriteOKFBundle(docs []types.NormalizedDocument, opts WriteOptions) ([]strin
 		return nil, err
 	}
 
-	// Create changelog if source is provided
+	// Create changelog with summarization metadata if source is provided.
 	if opts.Source != "" {
-		if err := changelog.CreateChangelog(opts.OutDir, opts.Source, len(docs)); err != nil {
+		mode := opts.SummarizeMode
+		algo := opts.SummarizeAlgorithm
+		lang := opts.Language
+		if err := changelog.CreateChangelogWithMetadata(opts.OutDir, opts.Source, len(docs), mode, algo, lang); err != nil {
 			return nil, fmt.Errorf("failed to create changelog: %w", err)
 		}
 	}
 
-	return written, nil
+	return &WriteResult{Written: written, Stats: stats}, nil
+}
+
+// buildSummarizer constructs the configured Summarizer or returns a
+// descriptive error. Callers fall back to the legacy heuristic on error.
+func buildSummarizer(opts WriteOptions) (summarize.Summarizer, error) {
+	mode := opts.SummarizeMode
+	if mode == "" {
+		mode = string(summarize.DefaultMode)
+	}
+	algo := opts.SummarizeAlgorithm
+	if algo == "" {
+		algo = summarize.DefaultAlgorithm
+	}
+	lang := opts.Language
+	if lang == "" {
+		lang = summarize.DefaultLanguage
+	}
+	return summarize.NewSummarizer(summarize.Config{
+		Mode:                summarize.Mode(mode),
+		Algorithm:           algo,
+		Language:            lang,
+		BundlePath:          opts.OutDir,
+		EdmundsonConfigPath: opts.EdmundsonConfigPath,
+	})
+}
+
+// generateSummary runs the configured summarizer, falling back to the legacy
+// heuristic extractor if anything fails. The returned source identifies which
+// path actually produced the summary, used by the caller to update stats.
+// requestedMode is the mode the user asked for; when the returned source is
+// inconsistent with the request (e.g., mode=llm but source="lsa"), that
+// counts as a fallback.
+func generateSummary(
+	s summarize.Summarizer,
+	sErr error,
+	description string,
+	doc *types.NormalizedDocument,
+	stats *SummaryStats,
+	onWarn func(path, message string),
+	requestedMode string,
+) (summarize.Summary, string) {
+	if s == nil || sErr != nil {
+		sum := summarize.Extract(description, doc.Markdown, doc.Title)
+		stats.Fallbacks++
+		if sum.Source == summarize.SourceNone {
+			stats.Failed++
+			if onWarn != nil {
+				onWarn(doc.OutputPath, "no summary could be generated")
+			}
+		} else if onWarn != nil && sErr != nil {
+			onWarn(doc.OutputPath, fmt.Sprintf("summarizer init failed, used heuristic: %v", sErr))
+		}
+		return sum, sum.Source
+	}
+
+	sum, err := s.Summarize(doc.Markdown, doc.Title)
+	if err != nil || sum.Text == "" {
+		fallback := summarize.Extract(description, doc.Markdown, doc.Title)
+		stats.Fallbacks++
+		if fallback.Source == summarize.SourceNone {
+			stats.Failed++
+			if onWarn != nil {
+				if err != nil {
+					onWarn(doc.OutputPath, fmt.Sprintf("summarization failed: %v", err))
+				} else {
+					onWarn(doc.OutputPath, "no summary could be generated")
+				}
+			}
+			return fallback, summarize.SourceNone
+		}
+		if onWarn != nil && err != nil {
+			onWarn(doc.OutputPath, fmt.Sprintf("fell back to heuristic: %v", err))
+		}
+		return fallback, fallback.Source
+	}
+
+	// If the user asked for LLM mode but a non-LLM source came back, the
+	// internal LLM summarizer fell back to its extractive helper.
+	if requestedMode == string(summarize.ModeLLM) && sum.Source != "llm" {
+		stats.Fallbacks++
+		if onWarn != nil {
+			onWarn(doc.OutputPath, fmt.Sprintf("LLM unavailable, fell back to %s", sum.Source))
+		}
+	}
+	return sum, sum.Source
 }
 
 // writeIndexFiles generates index.md files for each directory with summaries.
