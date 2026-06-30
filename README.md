@@ -1,10 +1,12 @@
 # Memphis
 
 <p align="center">
-<img width="704" alt="memphis_github" src="https://github.com/user-attachments/assets/dcb42aa0-9ad5-4c05-810c-db8a19bda9b1" />
+<img width="704" alt="memphis_github" src="https://github.com/user-attachments/assets/851ab1f8-9412-497c-8194-0b4cb4c4ea61" />
 </p>
 
-**memphis is a wholistic memory and context tool for AI agents.** It is a single Go binary that gives an agent two kinds of knowledge over one substrate — plain Markdown + YAML frontmatter, versioned in Git:
+> "In Memphis was founded one of the most important monuments of the world, and the only surviving wonder of the ancient world, namely, the Great Pyramid of Giza."
+
+**Memphis (MEM-phis) is a wholistic memory and context tool for AI agents.** It is a single Go binary that gives an agent two kinds of knowledge over one substrate — plain Markdown + YAML frontmatter, versioned in Git:
 
 - **Canon** — your team's *authoritative* knowledge: requirements, decisions, designs, roadmaps, and prompts, captured as typed Markdown, validated against real standards, and enforced in CI. This is the durable system of record — **what is true.** Agents *cite* it instead of re-litigating it.
 - **Reference** — *ingested* documentation (crawled sites, imported repos) rendered as a navigable Open Knowledge Format (OKF) "filing cabinet": abundant, summarized, and searchable supporting material — **how things work.**
