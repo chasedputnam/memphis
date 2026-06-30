@@ -12,7 +12,13 @@ Every memphis step is guarded by "if this is a memphis store (a `.okf/config.yam
 
 ## Install
 
-Copy the skill folders into your personal Claude Code skills directory:
+The quickest way is the bundled installer at the repo root. It auto-detects each toolchain you have (Claude Code, Kiro, git) by its folder and, for the ones it finds, copies the skills into `~/.claude/skills` and runs `memphis hooks install` for that target:
+
+```bash
+./install_skills.sh .        # pass the store dir; defaults to .
+```
+
+Or copy the skill folders into your personal Claude Code skills directory by hand:
 
 ```bash
 cp -R .claude/skills/spec .claude/skills/dev .claude/skills/code-review ~/.claude/skills/
