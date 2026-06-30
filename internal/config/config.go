@@ -18,6 +18,13 @@ import (
 // DefaultRepositoryKey is used to mint artifact IDs when none is configured.
 const DefaultRepositoryKey = "OKF"
 
+// DefaultSpecRoots returns the directories scanned for spec documents that can be
+// projected into Canon (the local /spec layout and Kiro's). A fresh slice is
+// returned each call so callers may mutate the result safely.
+func DefaultSpecRoots() []string {
+	return []string{"specs", ".kiro/specs"}
+}
+
 // Ticketing configures external relationship (e.g. "## Related Tickets") linting.
 type Ticketing struct {
 	Provider string `yaml:"provider" json:"provider"`
@@ -36,6 +43,7 @@ type Enforcement struct {
 type Config struct {
 	RepositoryKey string      `yaml:"repository_key" json:"repository_key"`
 	CanonRoots    []string    `yaml:"canon_roots" json:"canon_roots"`
+	SpecRoots     []string    `yaml:"spec_roots" json:"spec_roots"`
 	Ticketing     Ticketing   `yaml:"ticketing" json:"ticketing"`
 	Enforcement   Enforcement `yaml:"enforcement" json:"enforcement"`
 }
@@ -45,6 +53,7 @@ func Default() Config {
 	return Config{
 		RepositoryKey: DefaultRepositoryKey,
 		CanonRoots:    []string{"canon"},
+		SpecRoots:     DefaultSpecRoots(),
 		Ticketing:     Ticketing{Provider: "github"},
 		Enforcement:   Enforcement{},
 	}
@@ -77,6 +86,11 @@ func Load(storeRoot string) (Config, error) {
 	// not "no canon at all", to avoid silently disabling the authority tier.
 	if len(cfg.CanonRoots) == 0 {
 		cfg.CanonRoots = Default().CanonRoots
+	}
+	// An omitted spec_roots likewise means "the defaults", not "no spec
+	// discovery", so projection keeps working on an un-customized store.
+	if len(cfg.SpecRoots) == 0 {
+		cfg.SpecRoots = DefaultSpecRoots()
 	}
 	if cfg.RepositoryKey == "" {
 		cfg.RepositoryKey = DefaultRepositoryKey

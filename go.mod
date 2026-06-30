@@ -18,6 +18,7 @@ require (
 
 require (
 	github.com/blacktop/go-foundationmodels v0.1.8
+	github.com/pmezard/go-difflib v1.0.0
 	github.com/yuin/goldmark v1.7.1
 )
 

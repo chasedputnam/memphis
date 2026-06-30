@@ -2,8 +2,8 @@
 
 memphis can summarize documents using Apple's on-device Foundation Models
 framework (macOS 26 Tahoe). When enabled, the engine routes `--summarize=llm`
-calls directly through the Foundation Models CGo bridge — no network, no
-HTTP server, no API key.
+calls directly through the Foundation Models CGo bridge, with no network, no
+HTTP server, and no API key.
 
 The provider is **opt-in** via the `applefm` build tag. Default builds keep
 a stub that reports unavailable, so non-Mac, Intel-Mac, CGo-disabled, and
@@ -30,7 +30,7 @@ built only when **all** of these constraints hold:
 It wraps [`github.com/blacktop/go-foundationmodels`](https://github.com/blacktop/go-foundationmodels),
 which compiles a Swift shim (`FoundationModelsShim.swift`) into a static
 library (`libFMShim.a`) that links into the memphis binary. The shim is
-**not** vendored or shipped pre-built — it has to be compiled locally
+**not** vendored or shipped pre-built; it has to be compiled locally
 because:
 
 1. `libFMShim.a` is gitignored upstream, so the Go module cache never

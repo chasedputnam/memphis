@@ -167,6 +167,51 @@ func loadFromText(t *testing.T, text string) Config {
 	return cfg
 }
 
+func TestDefault_SpecRoots(t *testing.T) {
+	got := Default().SpecRoots
+	want := []string{"specs", ".kiro/specs"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Default().SpecRoots=%v, want %v", got, want)
+	}
+}
+
+func TestRender_SpecRootsRoundTrips(t *testing.T) {
+	cfg := Default()
+	cfg.SpecRoots = []string{"specs", ".kiro/specs", "docs/specs"}
+	got := writeAndLoad(t, cfg)
+	if !reflect.DeepEqual(got.SpecRoots, cfg.SpecRoots) {
+		t.Errorf("SpecRoots=%v, want %v", got.SpecRoots, cfg.SpecRoots)
+	}
+}
+
+func TestLoad_EmptySpecRootsBackfillsDefault(t *testing.T) {
+	// A config file that omits spec_roots entirely must not silently disable spec
+	// discovery: Load backfills the default roots, mirroring canon_roots behavior.
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".okf"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(Path(dir), []byte("repository_key: OKF\ncanon_roots:\n  - canon\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(cfg.SpecRoots, DefaultSpecRoots()) {
+		t.Errorf("SpecRoots=%v, want default %v", cfg.SpecRoots, DefaultSpecRoots())
+	}
+}
+
+func TestRender_DefaultRendersBothSpecRoots(t *testing.T) {
+	out := Render(Default())
+	for _, want := range []string{"specs", ".kiro/specs"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("Render(Default()) missing spec root %q\n---\n%s", want, out)
+		}
+	}
+}
+
 // KnownProvidersForTest is an illustrative set of provider strings used only to
 // drive the render→load round-trip matrix. Render does not validate providers,
 // so this list need not stay exactly in sync with validate.KnownProviders; it

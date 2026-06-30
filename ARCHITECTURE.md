@@ -1,24 +1,28 @@
 # Architecture
 
-memphis is a **single Go binary** that gives AI agents two kinds of memory over one
-substrate — plain Markdown + YAML frontmatter, versioned in Git:
+memphis is a **single Go binary** that gives AI coding agents an enforceable authority
+layer over one substrate: plain Markdown plus YAML frontmatter, versioned in Git. It is
+built for spec-driven development, where the specs a workflow already produces become
+typed, gated **Canon** that agents are held to automatically.
 
-- **Canon** — the *authority* tier. Typed, validated, enforced normative artifacts
+memphis holds two kinds of memory:
+
+- **Canon**, the *authority* tier. Typed, validated, enforced normative artifacts
   (requirements, decisions, designs, roadmaps, prompts). This is the durable system of
   record: *what is true.* The authority engine is a faithful Go port of **rac-core**
   ("Requirements as Code").
-- **Reference** — the *discoverability* tier. Ingested documentation (crawled sites,
-  imported Markdown) rendered as a navigable Open Knowledge Format (OKF) "filing
-  cabinet": abundant, summarized, fast-changing supporting material.
+- **Reference**, the *discoverability* tier. Optional ingested documentation (crawled
+  sites, imported Markdown) rendered as a navigable Open Knowledge Format (OKF) bundle of
+  abundant, summarized, fast-changing supporting material.
 
 The guiding model:
 
-> **Memory is Canon. Context is the budgeted projection of Canon + Reference.
+> **Memory is Canon. Context is the budgeted projection of Canon plus Reference.
 > AI lives only in the projection. The substrate is Git. Indexes are derived.**
 
-The tool is **authority-first**: Canon leads and is enforced; Reference supports it. The
-agent-facing loop is **discover (fuzzy) → ground (in Canon, with a citation) → assemble
-(under a token budget)**.
+The tool is **authority-first**: Canon leads and is enforced, and Reference supports it.
+The agent-facing loop is **discover (fuzzy) → ground (in Canon, with a citation) →
+assemble (under a token budget)**.
 
 ---
 
@@ -26,7 +30,7 @@ agent-facing loop is **discover (fuzzy) → ground (in Canon, with a citation) �
 
 1. **The authority path is deterministic and AI-free.** No package under
    `internal/canon/...` may import the summarizer, an HTTP client, or an on-device LLM
-   bridge — enforced by a build-failing architecture test
+   bridge, a constraint enforced by a build-failing architecture test
    (`internal/canon/archcheck_test.go`). Classification, validation, relationship
    integrity, and the gate are pure functions of repository state.
 2. **Authority and discoverability are orthogonal.** Relevance (search) is upstream of
@@ -49,18 +53,18 @@ agent-facing loop is **discover (fuzzy) → ground (in Canon, with a citation) �
 ```mermaid
 flowchart TB
     subgraph CLI["cmd/memphis (Cobra)"]
-        ingest["crawl · import · update"]
-        author["new · promote"]
-        check["validate · gate · relationships · inspect"]
-        ops["serve · rebuild · export · demo"]
+        ingest["crawl, import, update"]
+        author["new, promote"]
+        check["validate, gate, relationships, inspect"]
+        ops["serve, rebuild, export, demo"]
     end
 
-    subgraph Store["internal/store — unified composition seam"]
+    subgraph Store["internal/store: unified composition seam"]
         load["Load(): Canon[] + Reference[]"]
-        idx["derived: search index · graph · relationships"]
+        idx["derived: search index, graph, relationships"]
     end
 
-    subgraph Canon["internal/canon/* — AUTHORITY (deterministic, AI-free)"]
+    subgraph Canon["internal/canon/*: AUTHORITY (deterministic, AI-free)"]
         parse["parse → Product AST"]
         classify["classify (type inference)"]
         validate["validate (type rules + standards)"]
@@ -68,15 +72,15 @@ flowchart TB
         gate["gate (→ SARIF, exit code)"]
     end
 
-    subgraph Ref["internal/* — REFERENCE + PROJECTION (AI allowed)"]
-        crawl["crawler · importer · normalize · writer"]
+    subgraph Ref["internal/*: REFERENCE + PROJECTION (AI allowed)"]
+        crawl["crawler, importer, normalize, writer"]
         search["search (Bleve)"]
         retrieval["retrieval (discover→ground→assemble)"]
         summarize["summarize (extractive / Apple FM / Ollama / API)"]
         scale["scale (RAG graduation)"]
     end
 
-    subgraph MCP["internal/mcp — read-only server"]
+    subgraph MCP["internal/mcp: read-only server"]
         tools["Canon + discovery tools"]
     end
 
@@ -93,7 +97,7 @@ flowchart TB
 
 ## Package map
 
-### Authority engine — `internal/canon/...` (ported from rac-core)
+### Authority engine: `internal/canon/...` (ported from rac-core)
 
 | Package | Responsibility | rac-core origin |
 |---|---|---|
@@ -119,7 +123,7 @@ flowchart TB
 | `internal/sarif` | SARIF 2.1.0 emitter for CI |
 | `internal/mcp` | Read-only MCP server exposing Canon + discovery tools |
 
-### Reference engine — existing memphis packages (unchanged half)
+### Reference engine: existing memphis packages (unchanged half)
 
 `crawler`, `importer`, `reader`, `normalize`, `writer` (ingestion → OKF bundle);
 `graph` (untyped backlinks); `search` (in-memory Bleve over both tiers); `context`
@@ -181,7 +185,7 @@ sequenceDiagram
     Store-->>MCP: candidates (tier, score)
     MCP->>Store: ground Canon hits (status, edges, citation)
     Note over MCP: superseded → resolve to successor
-    MCP->>MCP: assemble — Canon first; compress Reference;<br/>preserve [REQ-NNN] verbatim; overflow → follow-up
+    MCP->>MCP: assemble: Canon first; compress Reference;<br/>preserve [REQ-NNN] verbatim; overflow → follow-up
     MCP-->>Agent: budgeted context + citations
 ```
 
@@ -196,15 +200,15 @@ sequenceDiagram
   artifact retired.
 - **Identity**: an opaque `<repo-key>-<12 Crockford base32>` ID, minted once at creation
   and never re-derived on read. References resolve against an alias index (canonical ID
-  plus legacy aliases — `## ID`, filename prefix like `adr-002`, filename stem), so
+  plus legacy aliases such as `## ID`, a filename prefix like `adr-002`, or the filename stem), so
   human-readable cross-references keep resolving.
 - **Validation** (type-conditional): exactly one `# ` title; required sections present;
   well-formed `[REQ-NNN]` IDs (missing / malformed / empty / duplicate); constrained
-  metadata enums; and requirement-quality standards — **BCP-14/RFC 8174** keyword casing
+  metadata enums; and requirement-quality standards: **BCP-14/RFC 8174** keyword casing
   (error), **ISO/IEC/IEEE 29148** singular-requirement (warning), **EARS** conformance
   and `If`/`then` clause (warning), ambiguous verbs (warning). Roadmaps add horizon and
   advancement-link checks. External `## Related Tickets` entries are format-linted against
-  the configured provider — never network-resolved.
+  the configured provider, never network-resolved.
 - **Relationships**: typed edges declared as `## Related <Type>` / `## Supersedes`.
   Integrity checks (stable codes, rac-core parity):
   `relationship-target-not-found`, `relationship-target-ambiguous`,
@@ -238,13 +242,13 @@ When interoperating, the two tools meet at the Open Knowledge Format: rac-core c
 - **Unit tests** per Canon package (classification boundaries, identity format, frontmatter
   bomb guards, each validation rule on/off, every relationship integrity rule, the
   traversal/summary views).
-- **Architecture test** — fails the build if `internal/canon/...` ever imports the
+- **Architecture test**: fails the build if `internal/canon/...` ever imports the
   summarizer, `net/http`, or the Foundation Models bridge (Requirement: AI-free authority).
 - **Conformance tests** against real rac-core fixtures (anti-drift).
-- **Determinism test** — the gate produces byte-identical output across runs on identical
+- **Determinism test**: the gate produces byte-identical output across runs on identical
   repo state (no time/RNG dependence).
-- **Backward-compatibility** — pure-Reference stores impose no gate and behave as legacy.
-- **Retrieval tests** — authority-first ranking, verbatim `[REQ-NNN]` fidelity under
+- **Backward-compatibility**: pure-Reference stores impose no gate and behave as legacy.
+- **Retrieval tests**: authority-first ranking, verbatim `[REQ-NNN]` fidelity under
   compression, superseded→successor resolution, overflow → follow-up.
 
 ---

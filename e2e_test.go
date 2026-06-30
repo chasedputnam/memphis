@@ -587,3 +587,93 @@ func TestE2EInitNewGate(t *testing.T) {
 		t.Fatalf("gate failed on a freshly scaffolded store: %v\n%s", err, out)
 	}
 }
+
+// TestE2EProjectLifecycle proves the projection path: init a store, author a
+// spec requirements.md, project it into Canon, and gate. Re-projecting reuses
+// the same ID and yields byte-identical output (determinism via ID reuse).
+func TestE2EProjectLifecycle(t *testing.T) {
+	storeDir := filepath.Join(t.TempDir(), "store")
+	if out, err := exec.Command(testBinaryPath, "init", storeDir).CombinedOutput(); err != nil {
+		t.Fatalf("init failed: %v\n%s", err, out)
+	}
+
+	specPath := filepath.Join(storeDir, "specs", "feat", "requirements.md")
+	if err := os.MkdirAll(filepath.Dir(specPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	spec := "# Feat\n\n## Problem\n\nUsers cannot do X.\n\n## Requirements\n\n[REQ-001] The system SHALL do a specific, testable thing.\n"
+	if err := os.WriteFile(specPath, []byte(spec), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if out, err := exec.Command(testBinaryPath, "project", specPath, "--store", storeDir).CombinedOutput(); err != nil {
+		t.Fatalf("project failed: %v\n%s", err, out)
+	}
+	artifact := filepath.Join(storeDir, "canon", "feat", "requirements.md")
+	first, err := os.ReadFile(artifact)
+	if err != nil {
+		t.Fatalf("projected artifact missing: %v", err)
+	}
+
+	if out, err := exec.Command(testBinaryPath, "gate", storeDir).CombinedOutput(); err != nil {
+		t.Fatalf("gate failed on projected store: %v\n%s", err, out)
+	}
+
+	// Re-project with --write: identical bytes (stable ID ⇒ deterministic output).
+	if out, err := exec.Command(testBinaryPath, "project", specPath, "--store", storeDir, "--write").CombinedOutput(); err != nil {
+		t.Fatalf("re-project failed: %v\n%s", err, out)
+	}
+	second, err := os.ReadFile(artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(first) != string(second) {
+		t.Errorf("re-projection was not deterministic:\n--1--\n%s\n--2--\n%s", first, second)
+	}
+}
+
+// TestE2EHooksInstallUninstall proves hooks install writes the memphis marker to
+// every selected surface and uninstall removes it.
+func TestE2EHooksInstallUninstall(t *testing.T) {
+	storeDir := filepath.Join(t.TempDir(), "store")
+	if out, err := exec.Command(testBinaryPath, "init", storeDir).CombinedOutput(); err != nil {
+		t.Fatalf("init failed: %v\n%s", err, out)
+	}
+	// Create the toolchain markers so all four targets are exercised via --all.
+	for _, d := range []string{".git/hooks", ".claude", ".kiro/hooks", ".kiro/agents"} {
+		if err := os.MkdirAll(filepath.Join(storeDir, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if out, err := exec.Command(testBinaryPath, "hooks", "install", "--all", "--store", storeDir).CombinedOutput(); err != nil {
+		t.Fatalf("hooks install failed: %v\n%s", err, out)
+	}
+	surfaces := map[string]string{
+		filepath.Join(storeDir, ".git", "hooks", "pre-commit"):         "memphis gate",
+		filepath.Join(storeDir, ".claude", "settings.json"):            "memphis-managed",
+		filepath.Join(storeDir, ".kiro", "hooks", "memphis-gate.json"): "memphis gate",
+		filepath.Join(storeDir, ".kiro", "agents", "memphis.json"):     "memphis-managed",
+	}
+	for path, marker := range surfaces {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Errorf("expected %s installed: %v", path, err)
+			continue
+		}
+		if !strings.Contains(string(body), marker) {
+			t.Errorf("%s missing marker %q:\n%s", path, marker, body)
+		}
+	}
+
+	if out, err := exec.Command(testBinaryPath, "hooks", "uninstall", "--all", "--store", storeDir).CombinedOutput(); err != nil {
+		t.Fatalf("hooks uninstall failed: %v\n%s", err, out)
+	}
+	// pre-commit: block removed; settings/agent: marker gone.
+	if body, _ := os.ReadFile(filepath.Join(storeDir, ".claude", "settings.json")); strings.Contains(string(body), "memphis-managed") {
+		t.Error("claude settings still contains memphis marker after uninstall")
+	}
+	if _, err := os.Stat(filepath.Join(storeDir, ".kiro", "hooks", "memphis-gate.json")); !os.IsNotExist(err) {
+		t.Error("kiro-ide hook file should be removed after uninstall")
+	}
+}

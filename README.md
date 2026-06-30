@@ -6,118 +6,88 @@
 
 > "In Memphis was founded one of the most important monuments of the world, and the only surviving wonder of the ancient world, namely, the Great Pyramid of Giza."
 
-**Memphis (MEM-phis) is a wholistic memory and context tool for AI agents.** It is a single Go binary that gives an agent two kinds of knowledge over one substrate — plain Markdown + YAML frontmatter, versioned in Git:
+**Memphis (MEM-phis) is an enforceable authority layer for AI coding agents.** It is a single Go binary that turns the decisions, requirements, and designs your team agrees to into **Canon**: typed Markdown artifacts, validated against real standards, wired into a blocking **gate**, and served to agents over **MCP**. No decision goes unrecorded, and no agent silently violates one.
 
-- **Canon** — your team's *authoritative* knowledge: requirements, decisions, designs, roadmaps, and prompts, captured as typed Markdown, validated against real standards, and enforced in CI. This is the durable system of record — **what is true.** Agents *cite* it instead of re-litigating it.
-- **Reference** — *ingested* documentation (crawled sites, imported repos) rendered as a navigable Open Knowledge Format (OKF) "filing cabinet": abundant, summarized, and searchable supporting material — **how things work.**
+The problem memphis solves is simple to state and expensive to ignore: an AI agent's only real constraint is its context window, and most "memory" tools conflate two very different properties. **Authority** asks whether something is the canonical truth the team agreed to. **Discoverability** asks whether the right piece can be found at the right moment. Vector stores optimize discoverability and have no concept of authority. memphis makes authority a first-class, *enforced* property: Canon artifacts are typed, their relationships are integrity-checked, and a deterministic gate rejects malformed or conflicting authority before it lands, with no LLM and no network in that path.
 
-> **The intent:** an agent's only real constraint is its context window. So the job is choosing which true, relevant tokens to put in it. memphis separates the two properties that vector databases conflate — **authority** (is this the canonical truth the team agreed to?) and **discoverability** (can the right piece be found at the right moment?) — and serves both to agents over MCP.
->
-> **Memory is Canon. Context is the budgeted projection of Canon + Reference. AI lives only in the projection. The substrate is Git.**
+memphis is built for **spec-driven development**. The specs your workflow already produces (`requirements.md`, `design.md`) become typed Canon with one command, and the agents that read them are held to that Canon automatically, whether you drive Claude Code's `/spec → /dev → /code-review` skills, Kiro's specs and agent hooks, or any MCP client.
 
-### Philosophy
+> **Memory is Canon. Context is the budgeted projection of Canon (and optional Reference). AI lives only in the projection. The substrate is Git.**
 
-- **Authority-first.** Canon leads and is enforced; Reference supports it. At equal relevance, authoritative artifacts rank ahead of ingested docs, and every Canon result carries a verifiable citation and its lifecycle status.
-- **Deterministic where it counts.** The authority path — typing, validation, relationship integrity, the gate — is a pure function of repository state with **no LLM and no network** (a build-failing test enforces this). AI is confined to the discovery/projection layer, where it can summarize and rank but never decide what is authoritative.
-- **No database, no lock-in.** The source of truth is human- and agent-readable Markdown in Git. Search indexes, the relationship graph, and summaries are *derived projections* you can delete and rebuild at will.
-- **Catch problems at write time.** Bad normative knowledge is rejected by a CI gate before it lands; ingested reference docs are treated permissively. Strictness matches the cost of being wrong.
+The Canon authority model is a faithful Go port of the **Requirements-as-Code** (rac-core) engine, and the two interoperate through the Open Knowledge Format. For the full design, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-### The agent loop
+---
 
-**Discover** (fuzzy full-text search across both tiers) → **ground** (resolve hits to the authoritative, status-checked Canon artifact, following supersedes to the current successor) → **assemble** (pack into a token budget, Canon-first, with normative requirement text preserved verbatim). The agent recalls fuzzily, then stands on truth.
+## Why memphis: one scenario
 
-### Use cases
-
-- **Stop agents (and people) from violating decisions you already made.** Capture ADRs and requirements as Canon; the agent retrieves the *why* and cites it.
-- **Make a large docs corpus usable as agent memory** without standing up a vector store — crawl or import it into a Reference bundle and serve it over MCP.
-- **Enforce requirement quality in CI** — `memphis gate` checks BCP-14 / ISO 29148 / EARS conformance and relationship integrity, emitting SARIF.
-- **Promote scattered docs into authoritative artifacts** as your knowledge matures, and graduate the fuzzy half to external RAG when it outgrows the filing cabinet — while Canon always stays canonical in the repo.
-
-The Canon authority model is a faithful Go port of the **Requirements-as-Code** (rac-core) engine; the two tools interoperate through the Open Knowledge Format. For the full design, see [ARCHITECTURE.md](./ARCHITECTURE.md).
-
-## Why a "filing cabinet"?
-Current AI memory systems can be broken down into three types:
-
-- **Notebook**: Built for capture, drafting, and personal connection-making. 
-  - Example: 
-    - An Obsidian vault is a platonic notebook: a folder of markdown files, freeform linking, and portable. Its strengths are also its limits however. It has no structured retrieval as to perform a search you need to be a full text search. It has no referential integrity as you can link to a note that doesn't exist and Obsidian will not stop you. It has no concurrency safety so it does not support two writers or you end up with conflicts. It scales to any number of notes for _one person doing their own thinking_. As soon as multiple parties and writes occur, it falters.
-- **Database**: Engineered for large-scale, multi-user, precision retrieval. 
-  - These are commonly vector stores (like Pinecone or Milvus) and relational databases (like PostgreSQL). 
-  - They can scale to millions of items, support concurrent writes, provide ACID guarantees, and produce audit logs. 
-  - The cost is complex setup, operational maintenance, heavy infrastructure, opaque embeddings that can mislead, and a deployment story that does not look anywhere as simple as a "drop these files in a folder" situation.
-
-There needs to be a middle ground that can serve most functions without the extremes of both ends.
-
-- **filing cabinet**: A notebook with a structured layer on top. 
-  - The cabinet's drawers: the file folders, the labels, the sorting rules, etc. 
-    - These are not the documents themselves. They are a navigation system that makes the documents findable without reading all of them. In the vault concept, this means frontmatter conventions, summary callouts, an index file, a backlinking discipline, and an agent loop that maintains all of that. The strengths are summary-first navigation, traceable answers, and no vector infrastructure. 
-  - The limits are real too:
-    - At a scale of up to about 100 articles and roughly 400,000 words, any LLM's ability to navigate via summaries and index pages appears sufficient and the overhead and complexity of a full RAG stack would likely introduce more latency and retrieval noise than it removes. But past that ceiling, summary navigation starts producing noise faster than it removes it. A RAG search and retrieval system becomes less an additional burden and more of a requirement.
-
-## The Filing Cabinet Architecture
-
-Open Knowledge Format knowledge bundles [https://openknowledgeformat.com/what-is-okf] are designed to be a 'human and agent' readable bundle of Markdown files with YAML frontmatter. People can author it, agents can generate it, and tools can exchange it without a central registry or proprietary SDK.
-
-OKF bundles can be extended to provide functionality as a "filing cabinet" for AI agents - a persistent, structured knowledge store that lives outside the context window. Key properties:
-
-- **Summary-first navigation**: Each concept has a summary callout, and the index provides inline summaries so agents can decide what to read without paying full token cost
-- **Bidirectional backlinks**: Concepts track both outbound links and backlinks in frontmatter, enabling graph traversal
-- **Scale ceiling detection**: The `inspect` command warns when bundles exceed ~100 concepts or ~400K tokens, signaling when to consider adding a RAG implementation instead
-- **Token-aware retrieval**: Tools support token budgets and compression levels to fit responses within context windows
-
-This architecture allows AI agents to efficiently navigate large documentation sets by reading summaries first, then drilling into specific concepts as needed.
-
-## Canon: authoritative agent memory
-
-The filing cabinet handles *reference* knowledge — abundant docs where recall matters more than perfection. But the knowledge that actually steers an agent — *why* you chose an approach, *what* must hold — has a different lifecycle and a higher cost of being wrong. memphis holds that as **Canon**: typed, validated, enforced artifacts that live alongside Reference in the same store.
-
-- **Five typed artifacts** — Requirement, Decision, Design, Roadmap, Prompt. Type is *inferred* from the `##` sections an artifact contains, not declared.
-- **Minted identity** — every Canon artifact carries a stable opaque ID (`<repo-key>-<12-char Crockford base32>`); cross-references resolve through an alias index, so human-readable links like `ADR-002` keep working.
-- **Typed relationships** — `## Related <Type>` / `## Supersedes` edges with integrity checks: broken / ambiguous / self references, edge legality, target-type range, status-consistency (a live artifact may not point at a retired one, except via supersedes), and cycle detection.
-- **Standards-mapped validation** — requirement quality is checked against **BCP-14 / RFC 8174** (only uppercase MUST/SHALL/SHOULD carry normative weight), **ISO/IEC/IEEE 29148** (singular requirements), and **EARS** patterns.
-- **Lifecycle + recency** — a `## Status` per type (e.g. Proposed/Accepted/Superseded), with recency derived from Git history rather than stored timestamps.
-- **A blocking gate** — `memphis gate` runs validation + relationship integrity, classifies findings as blocking or advisory per a governed policy, and emits SARIF for CI.
-
-A store with **no Canon behaves exactly like the original memphis** — adopting the authority layer is additive. For the full picture, see [ARCHITECTURE.md](./ARCHITECTURE.md).
-
-### Authoring Canon
+You make an architectural decision and record it as Canon:
 
 ```bash
-# Configure the store (optional; sensible defaults otherwise)
-mkdir -p .okf
-cat > .okf/config.yaml <<'EOF'
-repository_key: OKF
-canon_roots: [canon]
-ticketing:
-  provider: github
-EOF
-
-# Scaffold a typed artifact with a freshly minted ID
 memphis new decision canon/adr-001-use-bleve.md --title "Use Bleve for search"
-
-# Edit the sections, then check it (and the whole corpus)
-memphis gate .
-
-# Inspect the typed relationship graph and its health
-memphis relationships . --validate --summary
-
-# Promote an ingested Reference doc into a typed Canon draft
-memphis promote guides/caching.md --type decision
+$EDITOR canon/adr-001-use-bleve.md      # fill ## Status (Accepted), ## Decision, ## Consequences
+memphis gate .                          # validates structure, standards, relationship integrity
 ```
+
+Two weeks later, in a brand-new session with no memory of that conversation, an agent proposes ripping out Bleve for a vector database. Because memphis is wired into the workflow:
+
+- The agent **grounds on Canon over MCP** first. `find_decisions` surfaces the "Use Bleve for search" artifact with status **Accepted** and its consequences, so the agent argues *from* the decision instead of around it.
+- If a change still lands that contradicts Accepted Canon, the **gate blocks it** at commit time (git hook) and in CI (`gate --sarif`), citing the exact artifact and rule.
+- When the decision genuinely *should* change, you mint a successor that `## Supersedes` the old one. memphis follows the supersede chain so agents always see the current truth, never a stale one.
+
+That is the whole point: **the decision is recorded once and respected thereafter**, by people and agents alike, without anyone having to remember it.
+
+---
+
+## The core model
+
+memphis gives an agent two kinds of knowledge over one substrate, plain Markdown plus YAML frontmatter, versioned in Git:
+
+| | **Canon** (authority) | **Reference** (recall, optional) |
+|---|---|---|
+| Answers | **What is true**: what the team decided and what must hold | **How things work**: supporting documentation |
+| Content | Requirements, decisions, designs, roadmaps, prompts | Ingested docs (crawled sites, imported repos) |
+| Created by | `memphis new` / `memphis project` / `memphis promote` | `memphis crawl` / `memphis import` |
+| Validation | Typed, standards-checked, relationship-integrity-checked, **gated in CI** | Permissive, abundant and searchable |
+| Determinism | Pure function of repo state, **no LLM, no network** | AI may summarize and rank in the discovery layer |
+
+A **store** is one directory in Git holding both tiers. The only thing separating them is `canon_roots` in `.okf/config.yaml`: files under those roots are Canon, and everything else is Reference. Canon is the hero of memphis. Reference is an optional convenience for teams that also want a large docs corpus searchable as agent memory (see the [Appendix](#appendix-reference-tier-and-okf-format)).
+
+### The five Canon artifact types
+
+Each is typed Markdown with required sections, a minted opaque ID (`<repository-key>-<12-char Crockford base32>`, for example `OKF-KTQ63DPSMF19`), a lifecycle status, and typed relationships (`## Related <Type>`, `## Supersedes`).
+
+| Type | Captures | Key required sections |
+|---|---|---|
+| `requirement` | What must hold | `## Problem`, `## Requirements` (`[REQ-NNN] … SHALL …`) |
+| `decision` | A choice and its rationale (ADR) | `## Context`, `## Decision`, `## Consequences` |
+| `design` | How something is built | `## Context`, `## User Need`, `## Design`, `## Constraints` |
+| `roadmap` | Intended outcomes over time | `## Outcomes`, `## Initiatives` |
+| `prompt` | A reusable, versioned prompt | `## Objective`, `## Input`, `## Instructions`, `## Output` |
+
+### The gate
+
+`memphis gate` is the enforcement mechanism and the heart of the authority model. It loads the corpus, validates every artifact, checks relationship integrity, applies your enforcement policy, and exits non-zero on any blocking finding, emitting SARIF for required-checks. It is **deterministic and offline** (a build-failing test forbids `net/http` or any LLM dependency in the authority path), so it is safe in pre-commit hooks and CI. Validation includes:
+
+- **BCP-14 / RFC 8174**: only ALL-CAPS `MUST`/`SHALL`/`SHOULD` carry normative weight.
+- **ISO/IEC/IEEE 29148**: requirements should be singular and testable.
+- **EARS**: Easy Approach to Requirements Syntax conformance.
+- **Relationship integrity**: no dangling, ambiguous, miscast, or cyclic references, and live artifacts don't depend on retired ones (except via `## Supersedes`).
+
+---
 
 ## Installation
 
-### Download Binary
+### Download a binary
 
 Download the latest binary for your platform from the [releases page](https://github.com/chasedputnam/memphis/releases).
 
-### Build from Source
+### Build from source
 
 ```bash
 go install github.com/chasedputnam/memphis/cmd/memphis@latest
 ```
 
-Or clone and build:
+Or clone and build (Go 1.25+):
 
 ```bash
 git clone https://github.com/chasedputnam/memphis.git
@@ -125,111 +95,35 @@ cd memphis
 make build
 ```
 
-### Apple Intelligence (optional)
+> **Apple Intelligence (optional, Reference summaries only):** on macOS 26 Tahoe with Apple Silicon, memphis can summarize Reference docs through Apple's on-device Foundation Models via the opt-in `applefm` build tag. See [docs/APPLE_INTELLIGENCE.md](docs/APPLE_INTELLIGENCE.md). This never touches the Canon authority path.
 
-On macOS 26 Tahoe with Apple Silicon, memphis can summarize directly through
-Apple's on-device Foundation Models. The provider is opt-in via the `applefm`
-build tag and requires a one-time Swift shim compilation. See
-[docs/APPLE_INTELLIGENCE.md](docs/APPLE_INTELLIGENCE.md) for the build
-workflow.
+---
 
-## Quick Start
-
-memphis operates on a **store**: a single directory, versioned in Git, that holds both tiers over one substrate. A store is just:
-
-```
-my-store/
-├── .okf/config.yaml     # store config: repository_key, canon_roots, enforcement
-├── canon/               # Canon tier — typed authoritative artifacts (memphis new / promote)
-└── reference/           # Reference tier — ingested OKF bundle (memphis crawl / import)
-```
-
-There is no separate "create a bundle" step apart from "create a store." The Reference OKF bundle and the Canon artifacts are **two tiers of the same store**, distinguished only by whether a file lives under a `canon_roots` directory. You serve the whole store — both tiers — with one `memphis serve`. See [How Canon and Reference fit together](#how-canon-and-reference-fit-together) for the integration model.
-
-### 1. Initialize a store
-
-`memphis init` scaffolds the store for you: it writes a self-documenting `.okf/config.yaml` and creates the `canon_roots` directories. Defaults match memphis's implicit configuration, so you can override only what you need.
+## Quick start
 
 ```bash
+# 1. Scaffold a store (writes .okf/config.yaml + canon roots)
 memphis init my-store && cd my-store
-git init                     # the store is just Markdown in Git
+git init
 
-# Override defaults as needed:
-# memphis init my-store --repository-key PROJ --canon-root canon --ticketing jira
-```
-
-`canon_roots` lists the directories that hold the authority tier; everything else under the store is treated as Reference. The generated `.okf/config.yaml` looks like:
-
-```yaml
-# Repository key: prefix for minted Canon artifact IDs (e.g. OKF-3F8A...).
-repository_key: OKF
-
-# Canon roots: directories that hold the authoritative tier. Everything else
-# under the store is treated as Reference. Files here are validated by `memphis gate`.
-canon_roots:
-  - canon
-
-# Ticketing provider: format-lints external "## Related Tickets" links.
-# One of: github, jira, linear, azure-devops, servicenow, none.
-ticketing:
-  provider: github
-
-# Enforcement: reclassify gate findings by rule code. Empty = each rule keeps
-# its default severity. Uncomment and list rule codes to override.
-enforcement: {}
-```
-
-### 2. Author authoritative knowledge (Canon)
-
-Scaffold a typed artifact, fill in its sections, and check it. This is the durable system of record — the *why* and the *what must hold*.
-
-```bash
+# 2. Get Canon in. Author it directly:
 memphis new decision canon/adr-001-use-bleve.md --title "Use Bleve for search"
-$EDITOR canon/adr-001-use-bleve.md      # fill in ## Status, ## Decision, etc.
-memphis gate .                          # validate + relationship integrity
-```
+$EDITOR canon/adr-001-use-bleve.md
 
-### 3. Ingest reference knowledge (the OKF bundle)
+#    Or project an approved spec into Canon (one command, no re-authoring):
+memphis project specs/search/requirements.md
 
-Crawl a docs site or import local Markdown **into the same store**, under a non-Canon directory. This populates the Reference tier — the searchable "filing cabinet."
+# 3. Enforce it
+memphis gate .                      # blocks on any structural, standards, or integrity failure
 
-```bash
-# Crawl a documentation site into the store's reference/ directory
-memphis crawl https://docs.example.com --out ./reference
+# 4. Wire the gate into your tools so it runs automatically
+memphis hooks install               # git + detected agent toolchains (Claude Code / Kiro)
 
-# …or import local Markdown
-memphis import ~/docs --out ./reference --source-name "My Docs"
-```
-
-Steps 2 and 3 are independent — a store can have Canon only, Reference only, or both. A store with no Canon behaves exactly like legacy memphis.
-
-### 4. Build the unified indexes
-
-Regenerate the full-text search index and relationship graph over **both** tiers from the Markdown source of truth.
-
-```bash
-memphis rebuild .
-```
-
-### 5. Gate in CI (optional)
-
-Enforce Canon quality before changes land. Emits SARIF for required-checks.
-
-```bash
-memphis gate . --sarif > memphis.sarif
-```
-
-### 6. Serve the whole store over MCP
-
-One server exposes both tiers — Canon authority tools *and* Reference search/read tools.
-
-```bash
+# 5. Serve Canon (and any Reference) to your agent over MCP
 memphis serve . --mcp
 ```
 
-### 7. Configure your AI client
-
-Add to your MCP client configuration (e.g., Claude Desktop). Point it at the **store root**, not a sub-bundle, so the agent gets Canon and Reference together.
+Then point your MCP client at the **store root**:
 
 ```json
 {
@@ -242,623 +136,249 @@ Add to your MCP client configuration (e.g., Claude Desktop). Point it at the **s
 }
 ```
 
-### How Canon and Reference fit together
+The generated `.okf/config.yaml` is self-documenting:
 
-Creating Canon does **not** generate the OKF bundle, and ingesting docs does **not** create Canon — they are deliberately separate tiers because they have different lifecycles and different costs of being wrong. They are unified by the **store**, not by a single command:
+```yaml
+# Repository key: prefix for minted Canon artifact IDs (e.g. OKF-3F8A...).
+repository_key: OKF
 
-- **One directory, two tiers.** `canon_roots` in `.okf/config.yaml` is the only thing that separates them. Canon lives under those roots; everything else under the store root is Reference. Both are plain Markdown in the same Git repo.
-- **`memphis rebuild`** regenerates one search index and one relationship graph spanning both tiers, so an agent's search and context assembly see authority and reference together (Canon ranked first, with citations).
-- **`memphis serve`** loads the whole store and exposes both [Canon authority tools](#canon-authority-tools) and [search & read tools](#search--read-tools) from a single MCP endpoint.
-- **`memphis promote`** is the one bridge: it graduates a Reference concept into a typed Canon draft when ingested material matures into a decision worth enforcing.
+# Canon roots: directories that hold the authoritative tier. Everything else
+# under the store is treated as Reference. Files here are validated by `memphis gate`.
+canon_roots:
+  - canon
 
-Practically: set up the store once (step 1), then use `new`/`gate` to grow Canon and `crawl`/`import` to grow Reference, `rebuild` to index both, and `serve` to expose both.
+# Spec roots: directories scanned for spec documents (requirements.md,
+# design.md) that `memphis project` turns into typed Canon. Covers the local
+# specs/ layout and Kiro's .kiro/specs/ layout by default.
+spec_roots:
+  - specs
+  - .kiro/specs
 
-### Enable an existing repository (Reference-only retrofit)
+# Ticketing provider: format-lints external "## Related Tickets" links.
+# One of: github, jira, linear, azure-devops, servicenow, none.
+ticketing:
+  provider: github
 
-To make a code repository's scattered Markdown searchable without authoring Canon, import it into a self-contained `.okf` bundle and serve that directory directly. (Here the bundle dir *is* the store root; with no `canon_roots` populated it stays pure Reference.)
-
-```bash
-# Import all Markdown from a repository into a bundle
-memphis import ~/repo/my-project --out ~/repo/my-project/.okf --source-name "My Project"
-
-# Filter to specific directories or patterns
-memphis import ~/repo/my-project \
-  --out ~/repo/my-project/.okf \
-  --source-name "My Project" \
-  --include "docs/**/*.md" \
-  --include "**/*.mdx" \
-  --include "**/README.md" \
-  --exclude "node_modules/**" \
-  --exclude "vendor/**"
-
-# Serve the bundle to AI agents
-memphis serve ~/repo/my-project/.okf --mcp
+# Enforcement: reclassify gate findings by rule code. Empty = each rule keeps
+# its default severity. Uncomment and list rule codes to override.
+enforcement: {}
 ```
 
-**Example: enable a monorepo**
+---
+
+## Spec-driven development with memphis
+
+memphis is the authoritative memory beneath your spec-driven workflow. The specs your agent already writes become Canon, the gate keeps that Canon honest, and MCP feeds it back to the agent on every task. The same flow works whether you drive **Claude Code** (`/spec → /dev → /code-review` skills) or **Kiro** (specs + agent hooks). Both emit the same `requirements.md` / `design.md` contract, so one projector serves both.
+
+### The lifecycle, end to end
+
 ```bash
-memphis import ~/repo/cloud-platform \
-  --out ~/repo/cloud-platform/.okf \
-  --source-name "Cloud Platform" \
-  --include "**/docs/**/*.md" \
-  --include "**/README.md" \
-  --include "**/ARCHITECTURE.md" \
-  --include "**/adr/**/*.md" \
-  --exclude "**/test/**" \
-  --exclude "**/fixtures/**"
+# 0. Once per repo
+memphis init . && memphis hooks install        # auto-gate on write, commit, and merge
+
+# 1. Requirements: your agent's /spec (or Kiro) writes specs/<feature>/requirements.md
+#    Project it into typed Canon (mints a stable ID, fills sections, infers relationships):
+memphis project specs/<feature>/requirements.md
+#    Or project the whole spec directory at once (skips tasks.md):
+memphis project specs/<feature>/
+
+# 2. Design: the same workflow produces design.md; project it to a design artifact:
+memphis project specs/<feature>/design.md
+
+# 3. Development: the agent grounds on Canon over MCP before writing code.
+#    find_decisions / get_artifact / get_context return the authoritative requirements
+#    and decisions the task must honor (Canon-first, with citations and live status).
+
+# 4. Code review: the gate is the required check, and relationships cite what changed:
+memphis gate . --sarif > memphis.sarif
+memphis relationships . --summary
 ```
 
-**Keep the bundle updated**
+`memphis project` is **ratify-or-correct**: it never rewords your prose or silently overwrites. A new artifact is created, an existing one is only changed with `--write` (or interactive confirmation), and `--dry-run` previews the diff. Re-projecting reuses the artifact's ID, so identity is stable across iterations. Relationships are inferred only from **literal** `OKF-…` and alias references in the prose, for high precision and never fuzzy matching.
+
+### Bootstrap from existing docs
+
+If a decision already lives in ingested Reference, graduate it into Canon instead of retyping it:
+
 ```bash
-memphis update ~/repo/my-project/.okf --force   # re-import when docs change
+memphis promote <concept-id-or-path> --type decision
 ```
+
+### Integrating into your agent's skills
+
+memphis is designed to disappear into your workflow. Each phase of spec-driven development emits authoritative memory as a natural byproduct of the work the agent is already doing: requirements become Canon the moment they're approved, decisions are captured as they're made, and the gate enforces all of it continuously. Drop these commands into the skill definitions you already use, and the loop runs itself. Every spec strengthens the memory, every task is grounded in it, and every review is checked against it.
+
+**Claude Code** (`~/.claude/skills/`):
+
+```bash
+# /spec: at each approval gate, project the just-approved doc into Canon and enforce it
+memphis project "specs/${FEATURE}/requirements.md"
+memphis gate .            # block approval on a failing gate
+
+# /dev: ground the implementation in authority before writing code (MCP, already running):
+#   find_decisions("<area>"), get_artifact("OKF-..."), get_context("<task>")
+memphis rebuild .         # refresh derived indexes after status changes
+
+# /code-review: make the gate a required check and cite touched authority
+memphis gate . --sarif > memphis.sarif
+memphis relationships . --summary
+```
+
+Install the on-write hook so the gate runs inside the agent loop:
+
+```bash
+memphis hooks install --claude     # PostToolUse hook → memphis gate after Write/Edit
+```
+
+**Kiro** (specs in `.kiro/specs/`, hooks in `.kiro/hooks/` for the IDE and `.kiro/agents/*.json` for the CLI):
+
+```bash
+memphis project .kiro/specs/${FEATURE}/    # same projector, Kiro layout
+memphis hooks install --kiro               # writes the Kiro IDE + CLI gate hooks
+```
+
+**Any MCP client** (no skills required): run `memphis serve . --mcp`, point the client at the store root, and the agent gets the authority tools (`find_decisions`, `get_artifact`, `get_context`, and the rest) directly.
+
+The result is a compounding system. The more your team specs, decides, and ships, the richer and more authoritative the agent's memory becomes, while the gate guarantees it never drifts from what the team actually agreed to.
+
+---
 
 ## Commands
 
-Commands are grouped and ordered by where they fall in the store lifecycle. Canon (authority) commands resolve `canon_roots` relative to a **store root** (`--store`, or the `[store]` positional, default `.`); Reference commands target a **bundle/output directory**. In a unified store these are the same directory.
+In rough order of use. Store-scoped commands default to the current directory (`.`).
 
 ### Store setup
 
-#### `memphis init [path]`
+| Command | Purpose |
+|---|---|
+| `memphis init [path]` | Scaffold a store: write `.okf/config.yaml` and create canon roots. Flags: `--repository-key`, `--canon-root` (repeatable), `--ticketing`, `--force`, `--quiet`. |
 
-Scaffold a new store: write a self-documenting `.okf/config.yaml` and create the `canon_roots` directories. Defaults match memphis's implicit configuration, so an initialized store and a config-less store behave identically. Safe by default — refuses to overwrite an existing store without `--force`.
+### Authoring Canon
 
-```bash
-memphis init my-store
-memphis init . --repository-key PROJ --canon-root canon --ticketing jira
-```
+| Command | Purpose |
+|---|---|
+| `memphis new <type> <path>` | Scaffold a typed artifact with a minted ID and the type's sections. Flags: `--store`, `--title`. |
+| `memphis project <spec-doc-or-dir>` | Project an approved `requirements.md`/`design.md` (local `specs/` or Kiro `.kiro/specs/`) into typed Canon: reuse or mint a stable ID, fill sections from the prose, infer literal relationships, validate. Flags: `--store`, `--type`, `--dry-run`, `--write`/`--force`, `--kiro-agent`, `--json`, `--quiet`. |
+| `memphis promote <concept-id-or-path>` | Graduate an ingested Reference concept into a typed Canon draft. Flags: `--store`, `--type`, `--out`. |
 
-Options:
-- `--repository-key` - Repository key for minted Canon IDs (default: `OKF`)
-- `--canon-root` - Canon root directory; repeatable (default: `canon`)
-- `--ticketing` - Ticketing provider: `github` (default), `jira`, `linear`, `azure-devops`, `servicenow`, `none`
-- `--force` - Overwrite an existing `.okf/config.yaml`
-- `--quiet` - Suppress success output (for scripting)
+### Authority
 
-### Canon (authority) commands
+| Command | Purpose |
+|---|---|
+| `memphis gate [store]` | Run the unified authority gate (validate + relationships + policy). Exits non-zero on any blocking finding. Flags: `--json`, `--sarif`. |
+| `memphis relationships [store]` | Report and validate the typed relationship graph. Flags: `--validate`, `--summary`, `--json`. |
 
-These operate on the typed artifacts under `canon_roots`. They are no-ops on a pure-Reference store.
+### Automation (event hooks)
 
-#### `memphis new <type> <path>`
+| Command | Purpose |
+|---|---|
+| `memphis hooks install` | Install hooks that run the gate automatically. git is always installed (`pre-commit` runs the blocking gate, `post-merge` runs the integrity guard), and agent targets are auto-detected. Target flags: `--git`, `--claude`, `--kiro-ide`, `--kiro-cli`, `--kiro`, `--all`, plus `--kiro-agent`, `--store`. |
+| `memphis hooks uninstall` | Remove only memphis-managed hook content, leaving other hooks intact. |
+| `memphis hooks status` | Show which memphis hooks are installed per target. |
 
-Scaffold a typed Canon artifact (`requirement`, `decision`, `design`, `roadmap`, `prompt`) with a freshly minted opaque ID and the type's required + recommended sections. Write the file under a `canon_roots` directory so it is recognized as Canon.
+Surfaces written: git (`.git/hooks/`), Claude Code (`.claude/settings.json` PostToolUse), Kiro IDE (`.kiro/hooks/memphis-gate.json`), and Kiro CLI (`.kiro/agents/<agent>.json` under `hooks.postToolUse`). Every install is marker-delimited and idempotent.
 
-```bash
-memphis new decision canon/adr-001-use-bleve.md --title "Use Bleve for search"
-memphis new requirement canon/req-search.md --store .
-```
+### Operating the store
 
-Options:
-- `--store` - Store root used to load config / mint IDs (default: `.`)
-- `--title` - Artifact title (defaults to a humanized filename)
+| Command | Purpose |
+|---|---|
+| `memphis rebuild [store]` | Regenerate derived indexes (full-text search + relationship graph) from the Markdown source of truth. |
+| `memphis serve <store>` | Serve the store over MCP. Flags: `--mcp` (default), `--name`, `--max-result-chars`. |
+| `memphis export [store]` | Export Reference knowledge for scale-out (documents/graph). |
+| `memphis demo` | Run an offline demo with a bundled example. |
 
-#### `memphis gate [store]`
+### Optional: Reference ingestion (secondary)
 
-Run the unified authority gate: validate every Canon artifact, check relationship integrity, and classify findings as blocking or advisory per the store's `enforcement` policy. Exits non-zero if any blocking finding exists. This is the command to wire into CI.
+For teams that also want a large docs corpus searchable as agent memory. These populate the Reference tier and never touch Canon.
 
-```bash
-memphis gate .                 # human output
-memphis gate . --json          # machine-readable result
-memphis gate . --sarif         # SARIF 2.1.0 for CI required-checks
-```
+| Command | Purpose |
+|---|---|
+| `memphis crawl <url>` | Crawl a documentation website into an OKF bundle. |
+| `memphis import <path>` | Import local Markdown into an OKF bundle. |
+| `memphis update <bundle>` | Update an existing bundle from its source. |
+| `memphis validate <bundle>` | Validate an OKF bundle. |
+| `memphis inspect <bundle>` | Inspect a bundle and show statistics. |
 
-#### `memphis relationships [store]`
-
-Report and validate the typed relationship graph (`## Related <Type>` / `## Supersedes` edges).
-
-```bash
-memphis relationships .                       # list edges
-memphis relationships . --validate            # + integrity issues (fails on errors)
-memphis relationships . --summary             # + coverage / orphans / broken counts
-memphis relationships . --validate --json
-```
-
-#### `memphis promote <concept> --type <type>`
-
-Promote an ingested Reference concept into a typed Canon draft — mints an ID, scaffolds the type's sections, and seeds the concept's content into the primary prose section. The draft is then validated so it is never silently treated as authoritative. This is the bridge from Reference to Canon.
-
-```bash
-memphis promote guides/caching.md --type decision
-```
-
-Options:
-- `--store` - Store root (default: `.`)
-- `--type` - Canon type to promote to (`requirement`, `decision`, `design`, `roadmap`, `prompt`)
-- `--out` - Output path (defaults to `<first canon root>/<slug>.md`)
-
-### Reference (ingestion) commands
-
-These build and maintain the Reference OKF bundle — the searchable filing cabinet.
-
-#### `memphis crawl <url>`
-
-Crawl a documentation website and create (or populate) an OKF bundle.
-
-```bash
-memphis crawl https://docs.example.com --out ./reference [options]
-```
-
-Options:
-- `--out, -o` - Output directory (required)
-- `--max-pages` - Maximum pages to crawl (default: 100)
-- `--max-depth` - Maximum crawl depth (default: 4)
-- `--include` - Include patterns (glob or regex)
-- `--exclude` - Exclude patterns
-- `--same-origin` - Stay on same origin (default: true)
-- `--respect-robots` - Respect robots.txt (default: true)
-- `--concurrency` - Fetch concurrency (default: 4)
-- `--force` - Overwrite output directory
-- `--dry-run` - List pages without crawling
-
-#### `memphis import <path>`
-
-Import local files into an OKF bundle.
-
-```bash
-memphis import ./docs --out ./reference [options]
-```
-
-Options:
-- `--out` - Output directory (required)
-- `--source-name` - Bundle title
-- `--include` - Include patterns
-- `--exclude` - Exclude patterns
-- `--force` - Overwrite output directory
-- `--summarize` - Summarization mode: `extractive` (default) or `llm`
-- `--summarize-algorithm` - Extractive algorithm: `lsa` (default), `lexrank`, `textrank`, `luhn`, `edmundson`, `sumbasic`, `kl`, `reduction`, `random`
-- `--language` - Stemmer language: `english` (default), `french`, `spanish`, `russian`, `swedish`, `norwegian`, `hungarian`
-- `--edmundson-config` - Path to `edmundson.config` YAML (only used when `--summarize-algorithm=edmundson`)
-
-See [Summarization](#summarization) for what each mode and algorithm does, and how to configure LLM providers.
-
-#### `memphis update <bundle>`
-
-Update an existing OKF bundle from its original source.
-
-```bash
-memphis update ./reference [options]
-```
-
-The source is automatically read from the bundle's `changelog.txt` file (created during crawl or import). You can override it with the `--source` flag.
-
-Options:
-- `--source, -s` - Override source URL or path
-- `--force` - Apply all changes without prompting
-- `--dry-run` - Show changes without applying them
-- `--max-pages` - Maximum pages to crawl, for URL sources (default: 100)
-- `--max-depth` - Maximum crawl depth, for URL sources (default: 4)
-- `--concurrency` - Fetch concurrency, for URL sources (default: 4)
-- `--include` - Include patterns
-- `--exclude` - Exclude patterns
-- `--summarize` - Override the summarization mode stored in the changelog
-- `--summarize-algorithm` - Override the extractive algorithm stored in the changelog
-- `--language` - Override the language stored in the changelog
-- `--edmundson-config` - Path to `edmundson.config` YAML
-
-When omitted, summarization flags default to whatever was last recorded in the bundle's changelog. Overrides on `update` apply for that run only and are not persisted to the changelog header.
-
-Example workflow:
-```bash
-memphis crawl https://docs.example.com --out ./reference  # initial crawl
-memphis update ./reference --dry-run                      # preview changes
-memphis update ./reference --force                        # apply all changes
-memphis update ./reference                                # interactive mode
-```
-
-### Store operation commands
-
-These operate on the store as a whole — both tiers.
-
-#### `memphis rebuild [store]`
-
-Regenerate all derived indexes (full-text search, relationship graph) over **both tiers** from the Markdown source of truth. Derived indexes are caches — deleting and rebuilding them never affects the canonical files. Run this after authoring Canon or ingesting Reference.
-
-```bash
-memphis rebuild .
-```
-
-#### `memphis serve <store>`
-
-Start an MCP server over a store. Loads both tiers: the Reference bundle plus, when present, the Canon authority tier and its tools.
-
-```bash
-memphis serve . --mcp
-```
-
-Options:
-- `--mcp` - Use MCP stdio transport (default: true)
-- `--name` - Server name
-- `--max-result-chars` - Maximum characters in tool results (default: 12000)
-
-#### `memphis validate <bundle>`
-
-Validate an OKF bundle's structure and filing-cabinet health (Reference tier). For Canon quality use `memphis gate`.
-
-```bash
-memphis validate ./reference [--json]
-```
-
-Validates:
-- Index structure and frontmatter
-- Concept frontmatter (required `type` field)
-- Internal link integrity (broken links)
-- **Filing cabinet health**: missing summary callouts, summary length, scale ceiling
-
-Missing summaries produce warnings (not errors) for backward compatibility with older bundles.
-
-#### `memphis inspect <bundle>`
-
-Display bundle statistics and scale metrics.
-
-```bash
-memphis inspect ./reference
-memphis inspect ./reference --recommendations
-```
-
-Output includes:
-- Concept count, link count, broken links, orphan concepts
-- Type and tag distribution
-- **Scale metrics**: total tokens, average tokens per concept, index ratio
-- **Scale status**: healthy, warning (approaching ceiling), or exceeded
-
-Options:
-- `--recommendations` - Show RAG graduation guidance if scale ceiling is exceeded
-
-When a bundle exceeds ~100 concepts or ~400K tokens, `inspect` warns that the filing cabinet pattern is approaching its scale ceiling. Use `--recommendations` to see guidance on adding vector search.
-
-#### `memphis export [store]`
-
-Export the **Reference** tier for graduation to an external RAG or graph backend when it outgrows the in-repo filing cabinet. Canon stays in the repo as the source of truth and is never exported as documents.
-
-```bash
-memphis export . --documents        # Reference concepts as JSONL (for RAG)
-memphis export . --graph            # relationship graph as JSON
-memphis export . --documents --out refs.jsonl
-```
-
-#### `memphis demo`
-
-Run an offline demo with the bundled example.
-
-```bash
-memphis demo [--serve]
-```
-
-## MCP Tools
-
-When serving a bundle via MCP, the following tools are available to AI agents. The server is **read-only** — all mutation happens via the CLI and Git PR review.
-
-### Canon (authority) Tools
-
-| Tool | Description |
-|------|-------------|
-| `get_artifact` | Read one authoritative Canon artifact by ID, with its type, status, relationships, and citation |
-| `find_decisions` | Find Canon decisions related to a topic |
-| `get_related` | Typed relationships for an artifact: outgoing references, incoming references, and a bounded multi-hop neighborhood |
-| `get_summary` | Summarize the Canon corpus: counts by type and lifecycle status |
-
-### Search & Read Tools
-
-| Tool | Description |
-|------|-------------|
-| `search_concepts` | Full-text search across both tiers with token budget control |
-| `read_concept` | Read a specific concept's content with compression options |
-| `get_neighbors` | Find related concepts via outbound links and backlinks |
-| `get_context` | Authority-aware context assembly (discover → ground → assemble) within a token budget; Canon ranks first and carries citations, reference items are marked `derived` |
-| `list_types` | List all concept types in the bundle |
-| `list_tags` | List all tags in the bundle |
-| `bundle_summary` | Get bundle statistics, scale metrics, and index content |
-
-### Live Update Tools
-
-| Tool | Description |
-|------|-------------|
-| `check_updates` | Check if the bundle source has updates available |
-| `apply_updates` | Apply pending updates from the source (regenerates summaries and backlinks) |
-| `bundle_health` | Check bundle health, scale ceiling, missing summaries, and source reachability |
-
-### Utility Tools
-
-| Tool | Description |
-|------|-------------|
-| `compression_stats` | View token compression statistics for this session |
-
-### Token Budget & Compression
-
-The search and read tools support token-aware responses to help AI agents manage context windows efficiently:
-
-**Parameters:**
-- `token_budget` - Maximum tokens for the response (estimates using cl100k_base encoding)
-- `compression` - Compression level: `none`, `light`, `medium`, `aggressive`
-- `detail_level` - Detail level 0-3 (0=minimal, 3=full content)
-
-**Compression Levels:**
-| Level | Effect |
-|-------|--------|
-| `none` | No compression, full content |
-| `light` | Normalize whitespace, collapse blank lines |
-| `medium` | Light + truncate to section boundaries with outline |
-| `aggressive` | Medium + aggressive truncation with retrieval hints |
-
-**Example: Budget-Aware Search**
-```json
-{
-  "tool": "search_concepts",
-  "arguments": {
-    "query": "authentication",
-    "token_budget": 2000,
-    "compression": "medium",
-    "detail_level": 2
-  }
-}
-```
-
-**Example: Get Context for a Topic**
-```json
-{
-  "tool": "get_context",
-  "arguments": {
-    "query": "how to authenticate users",
-    "token_budget": 4000,
-    "compression": "light"
-  }
-}
-```
-
-### Live Updates
-
-Bundles can be updated from their original source while the MCP server is running:
-
-**Check for Updates**
-```json
-{
-  "tool": "check_updates",
-  "arguments": {
-    "timeout_seconds": 30
-  }
-}
-```
-
-Response includes `has_changes`, `added`, `modified`, `deleted` counts.
-
-**Apply Updates**
-```json
-{
-  "tool": "apply_updates",
-  "arguments": {
-    "confirm": true
-  }
-}
-```
-
-Use `dry_run: true` to preview changes without applying them.
-
-## Open Knowledge Format
-
-OKF bundles are directories containing Markdown files with YAML frontmatter. The format implements the filing cabinet pattern with summary callouts and bidirectional backlinks.
-
-### Concept Format
-
-```markdown
 ---
-type: Guide
-title: Getting Started
-description: Learn how to get started with the product.
-tags:
-  - quickstart
-  - tutorial
-resource: https://docs.example.com/getting-started
-backlinks:
-  - concepts/authentication
-  - concepts/installation
+
+## MCP tools
+
+`memphis serve <store> --mcp` exposes the store to any MCP client. Tools are grouped by job.
+
+### Authority (Canon)
+
+| Tool | Returns |
+|---|---|
+| `find_decisions` | Canon artifacts matching a query, authority-first, with citations and lifecycle status. |
+| `get_artifact` | A specific artifact by ID (resolving `## Supersedes` to the current successor). |
+| `get_context` | A budgeted, Canon-first context pack for a task, with normative requirement text preserved verbatim. |
+| `get_related` | Typed relationships of an artifact (related requirements, decisions, and so on). |
+| `get_neighbors` | The relationship neighborhood of an artifact within N hops. |
+
+### Recall (Reference)
+
+| Tool | Returns |
+|---|---|
+| `search_concepts` | Full-text search across the Reference tier. |
+| `read_concept` | A single concept's full content. |
+| `get_summary` | A concept's summary callout. |
+| `list_types` / `list_tags` | The vocabulary present in the store. |
+
+### Live updates and utility
+
+`check_updates`, `apply_updates` (use `dry_run: true` to preview), `bundle_health`, `bundle_summary`, `compression_stats`.
+
 ---
-# Getting Started
 
-> [!summary]
-> Learn how to install and configure the product in under 5 minutes.
+## Configuration: `.okf/config.yaml`
 
-Your content here...
+| Key | Meaning |
+|---|---|
+| `repository_key` | Prefix for minted Canon IDs (for example `OKF`). |
+| `canon_roots` | Directories that hold the authority tier; everything else is Reference. |
+| `spec_roots` | Directories `memphis project` scans for spec docs. Default: `["specs", ".kiro/specs"]`. |
+| `ticketing.provider` | Format-lints `## Related Tickets` links. One of `github`, `jira`, `linear`, `azure-devops`, `servicenow`, `none`. |
+| `enforcement` | Reclassify gate findings by rule code into `blocking` / `advisory` / `disabled`. Empty means each rule keeps its default severity. |
+
+`config.yaml` is the only thing that separates the tiers, and the rendered output round-trips through load, so you can edit it by hand or regenerate it with `memphis init --force`.
+
+---
+
+## Appendix: Reference tier and OKF format
+
+The Reference tier is optional supporting material (abundant, summarized, searchable) rendered as an **Open Knowledge Format** (OKF) bundle: human- and agent-readable Markdown with YAML frontmatter, exchangeable without a central registry ([what is OKF](https://openknowledgeformat.com/what-is-okf)). It is the right tool when you want a large docs corpus usable as agent memory without standing up a vector store.
+
+### Retrofit an existing repository (Reference-only)
+
+```bash
+# Import a repo's Markdown into a self-contained bundle and serve it directly
+memphis import ~/repo/my-project --out ~/repo/my-project/.okf --source-name "My Project"
+memphis serve ~/repo/my-project/.okf --mcp
 ```
 
-### Required Fields
+With no `canon_roots` populated, the bundle stays pure Reference and behaves like a standalone searchable knowledge base. `memphis promote` is the bridge when a Reference concept matures into a decision worth enforcing as Canon.
 
-- `type` - Concept type (Guide, API Reference, Concept, etc.)
+### Concept format
 
-### Optional Fields
-
-- `title` - Document title
-- `description` - Brief description (max 180 chars)
-- `tags` - Array of topic tags
-- `resource` - Original source URL
-- `timestamp` - Last modified date
-- `backlinks` - Array of concepts that link to this one (auto-generated)
-
-### Index Format
-
-The root `index.md` provides summary-first navigation:
-
-```markdown
----
-okf_version: "0.1"
-total_concepts: 47
-total_tokens: 125000
-generated: 2024-01-15T10:30:00Z
----
-# My Documentation Bundle
-
-## Concepts (47)
-
-- [[getting-started]] · Guide, quickstart, tutorial
-  Learn how to install and configure the product in under 5 minutes.
-
-- [[authentication]] · Guide, security, oauth
-  Configure OAuth2 authentication with support for multiple providers.
-```
-
-### Summary Callouts
-
-Each concept should have a summary callout after the title:
-
-```markdown
-> [!summary]
-> A 1-2 sentence summary (max 200 characters) for navigation.
-```
-
-Summaries are auto-generated during `crawl` and `import` by the configured summarizer (see [Summarization](#summarization)). The default is extractive LSA over the document body; LLM mode and other extractive algorithms are available via flags.
-
-## Summarization
-
-Every concept in a bundle gets a `> [!summary]` callout. The summary is what makes the index inline-readable and what powers most of the filing-cabinet's token efficiency. memphis supports two summarization modes, selected per bundle by `--summarize` on `import`:
-
-| Mode | Source | When to use |
-|------|--------|-------------|
-| `extractive` (default) | Embedded Go port of [sumy](https://github.com/miso-belica/sumy) — no network, fully deterministic | Default for most bundles; fast, offline, reproducible |
-| `llm` | External API, Apple Intelligence, or local Ollama (see provider stack below) | When you want generative single-sentence summaries that handle link-heavy or noisy documents better |
-
-### Extractive algorithms
-
-Selected with `--summarize-algorithm` on `import`. Defaults to `lsa`.
-
-| Algorithm | What it does |
-|-----------|--------------|
-| `lsa` (default) | Latent Semantic Analysis; SVD over the term-sentence matrix. Good general purpose. |
-| `lexrank` | PageRank over an IDF-modified-cosine sentence graph. Robust on technical prose. |
-| `textrank` | PageRank over a shared-word sentence graph. Cheaper than LexRank, similar quality. |
-| `luhn` | Significant-word clusters. Strong for cue-heavy documents (headers, definitions). |
-| `edmundson` | Cue + key + title + location heuristic. Tunable via `edmundson.config`. |
-| `sumbasic` | Greedy word-probability with redundancy downweighting. |
-| `kl` | KL-divergence minimization between summary and document distributions. |
-| `reduction` | Sum of pairwise shared-word counts. Cheap baseline. |
-| `random` | Time-seeded random sentence pick. Useful as a control. |
-
-### Languages
-
-`--language` configures stemming for the extractive pipeline. Supported: `english` (default), `french`, `spanish`, `russian`, `swedish`, `norwegian`, `hungarian`. Stopword filtering is currently English-only; non-English bundles still get tokenization, stemming, and scoring, but lose the stopword filter.
-
-### LLM mode
-
-When `--summarize=llm` is passed, memphis walks a provider stack and uses the first one that is available:
-
-1. **External OpenAI-compatible API** — used when `api_endpoint` and `api_token` are set in `llm.config`. Honors `Retry-After` on 429s and retries 5xx with exponential backoff.
-2. **Platform-native on-device LLM** — Apple Intelligence on macOS 26 Tahoe + Apple Silicon (opt-in `applefm` build tag, see [docs/APPLE_INTELLIGENCE.md](docs/APPLE_INTELLIGENCE.md)); Windows Copilot Runtime stub.
-3. **Local Ollama** — `http://localhost:11434` by default, model `phi3:mini`.
-4. **Extractive fallback** — if none of the above are reachable, the engine falls back to the extractive summarizer so the import never fails because the LLM was offline.
-
-Configuration lives in `llm.config` (YAML), searched in this order: `<bundle>/llm.config`, then `~/.config/memphis/llm.config`.
+Each Reference concept is a Markdown file with frontmatter:
 
 ```yaml
-# Use an external OpenAI-compatible endpoint
-api_endpoint: https://api.openai.com/v1/chat/completions
-api_token: sk-...
-model: gpt-4o-mini
-
-# Or point local fallback at a custom Ollama
-local_endpoint: http://localhost:11434
-local_model: phi3:mini
-
-# Optional: override the prompt
-prompt_template: |
-  Summarize the following document in one concise sentence (max 200 characters).
-  Title: {{.Title}}
-  Content:
-  {{.Content}}
+---
+type: "Guide"
+title: "Getting Started"
+description: "How to get started"
+resource: "https://example.com/docs/getting-started"
+tags: ["setup", "onboarding"]
+timestamp: "2024-01-01T00:00:00.000Z"
+---
 ```
 
-Document content is intelligently truncated to a ~8000-token budget before being sent to the LLM: headings and first paragraphs are kept preferentially over body noise, with a hard token-level fallback if even the heading-only reduction overflows.
+`type` and `title` are required; `description`, `resource`, `tags`, and `timestamp` are optional. An `index.md` provides summary-first navigation and backlinks across the bundle.
 
-### Apple Intelligence (macOS 26 Tahoe)
+### Summarization
 
-On Apple Silicon Macs running macOS 26 Tahoe with Apple Intelligence enabled, memphis can call Foundation Models directly through an in-process CGo bridge — no HTTP server, no API key, no token leaves the device. This is opt-in via the `applefm` build tag so default builds keep working on Intel Macs, older macOS, Linux, and Windows. See [docs/APPLE_INTELLIGENCE.md](docs/APPLE_INTELLIGENCE.md) for the build workflow.
+Reference summaries can be generated by fast **extractive** algorithms (offline, deterministic) or, optionally, an **LLM** mode via an external OpenAI-compatible endpoint or a local Ollama fallback. Summarization applies only to Reference and never participates in the Canon authority path.
 
-When the bridge is built and available, `llm` mode automatically prefers Apple Intelligence over the Ollama fallback (the external `api_endpoint`, if configured, still wins — handy for A/B comparisons against cloud models).
+### Scale ceiling
 
-## Scale Ceiling & RAG Graduation
-
-The filing cabinet pattern works well for documentation sets up to ~100 concepts or ~400K tokens. Beyond this, query cost grows non-linearly because summary navigation produces too many candidates.
-
-**Check your bundle's scale:**
-```bash
-memphis inspect ./my-bundle
-```
-
-**When the ceiling is exceeded:**
-```bash
-memphis inspect ./my-bundle --recommendations
-```
-
-This outputs guidance on adding vector search (RAG) alongside the wiki structure:
-- Use header-based chunking (not token-count chunking)
-- Recommended local vector stores: DuckDB with vss extension, ChromaDB
-- Keep the wiki structure for synthesis questions; use vectors for precision lookups
-
-## Development
-
-```bash
-# Run tests
-make test
-
-# Run linter
-make lint
-
-# Build for all platforms
-make build-all
-
-# Run demo
-make demo
-```
-
-## End-to-end pipeline
-
-`internal/summarize/summarizer.go` dispatches on `--summarize` to one of two pipelines:
-
-```
-Raw bytes (markdown / HTML / text)
-   │
-   ▼
-nlp.Parser.Parse(text) ─── stripMarkdownArtifacts → splitParagraphs → tokenize → Document
-   │                       (frontmatter, code fences, callouts, links, bold/italic, etc.)
-   ▼
-            ┌────────────── mode = extractive (default) ──────────────┐
-            │                                                          │
-            ▼                                                          │
-sumer.NewSummarizer(algo, lang) → Summarizer                          │
-   │                                                                   │
-   ▼                                                                   │
-summarizer.Summarize(doc, sentenceCount=1) → []*nlp.Sentence          │
-   │           ↑                                                       │
-   │           └─ algorithm-specific scoring (LSA, LexRank, ...)       │
-   ▼                                                                   │
-Base.GetBestSentences ── stable sort by rating desc, then re-sort      │
-   │                     selected into document order                  │
-   ▼                                                                   │
-ExtractiveAdapter trims to MaxSummaryLength, returns Summary{Text}     │
-   │                                                                   │
-   │            ┌─────────────── mode = llm ──────────────┐            │
-   │            ▼                                          │            │
-   │   llm.Engine.Summarize(content, title)               │            │
-   │            │                                          │            │
-   │            ▼                                          │            │
-   │   intelligentTruncate to ~8000 tokens                │            │
-   │   (headings + first paras kept preferentially)       │            │
-   │            │                                          │            │
-   │            ▼                                          │            │
-   │   selectProvider →  api → apple → ollama             │            │
-   │            │              (Apple Foundation Models    │            │
-   │            │               on macOS 26 + applefm tag) │            │
-   │            ▼                                          │            │
-   │   provider.Generate(ctx, prompt)                     │            │
-   │            │                                          │            │
-   │            ▼                                          │            │
-   │   if err → fall back to extractive ──────────────────┘            │
-   │                                                                   │
-   └────────────────────────────────┬──────────────────────────────────┘
-                                    ▼
-              writer.injectSummaryCallout writes
-              `> [!summary]` block into the rendered .md file
-```
-
-The extractive path always requests **one** sentence because the OKF summary callout is a single line. The LLM path wraps a single-sentence prompt template; if the configured provider is unavailable or fails, the engine silently falls back to extractive so an import never fails because the LLM was offline.
-
-## License
-
-MIT
+Summary-first navigation works well up to roughly **100 concepts / ~400K tokens**. Past that, graduate the fuzzy half to an external RAG system via `memphis export`, while Canon always stays canonical in the repo.
