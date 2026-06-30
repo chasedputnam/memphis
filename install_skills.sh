@@ -7,18 +7,19 @@
 # installs into the ones it finds:
 #
 #   Claude Code  (~/.claude or <store>/.claude)  -> skills + PostToolUse gate hook
-#   Kiro         (~/.kiro   or <store>/.kiro)    -> IDE + CLI gate hooks
+#   Kiro         (~/.kiro   or <store>/.kiro)    -> skills + IDE + CLI gate hooks
 #   git          (<store>/.git)                  -> pre-commit / post-merge gate
 #
-# Skills are a Claude Code concept, so they install only for Claude Code. Hooks
-# are installed via the `memphis` binary (which must be on PATH) and require the
-# target store to be a memphis store (a .okf/config.yaml exists).
+# Claude Code and Kiro share the same SKILL.md format, so the same skill folders
+# install into both (~/.claude/skills and ~/.kiro/skills). Hooks are installed
+# via the `memphis` binary (which must be on PATH) and require the target store
+# to be a memphis store (a .okf/config.yaml exists).
 #
 # Usage:
 #   ./install_skills.sh [STORE_DIR]
 #
 #   STORE_DIR   memphis store to wire hooks into (default: current directory).
-#               Skills always install to your personal ~/.claude/skills.
+#               Skills install to your personal ~/.claude/skills and ~/.kiro/skills.
 
 set -euo pipefail
 
@@ -70,14 +71,11 @@ install_hooks() {
 	memphis hooks install "$flag" --store "$STORE_DIR" 2>&1 | sed 's/^/  /'
 }
 
-# --- run --------------------------------------------------------------------
-printf "%smemphis skills + hooks installer%s\n" "$BOLD" "$RESET"
-printf "store: %s\n" "$STORE_DIR"
-
-# Claude Code: skills + hooks
-if [ "$CLAUDE_PRESENT" -eq 1 ]; then
-	head "Claude Code detected"
-	dest="$HOME/.claude/skills"
+# install_skills_into <dest-dir> — copy every bundled skill into a skills dir.
+# Skills use the same SKILL.md format for Claude Code and Kiro, so the same
+# folders install into both ~/.claude/skills and ~/.kiro/skills.
+install_skills_into() {
+	local dest="$1"
 	mkdir -p "$dest"
 	for s in "${SKILLS[@]}"; do
 		if [ -d "$SKILLS_SRC/$s" ]; then
@@ -88,20 +86,30 @@ if [ "$CLAUDE_PRESENT" -eq 1 ]; then
 			warn "skill source missing: $SKILLS_SRC/$s"
 		fi
 	done
+}
+
+# --- run --------------------------------------------------------------------
+printf "%smemphis skills + hooks installer%s\n" "$BOLD" "$RESET"
+printf "store: %s\n" "$STORE_DIR"
+
+# Claude Code: skills + hooks
+if [ "$CLAUDE_PRESENT" -eq 1 ]; then
+	head "Claude Code detected"
+	install_skills_into "$HOME/.claude/skills"
 	install_hooks --claude "Claude Code"
 else
 	head "Claude Code"
 	skip "not detected (no ~/.claude or $STORE_DIR/.claude) — skipping skills + hooks"
 fi
 
-# Kiro: hooks only (no skill concept)
+# Kiro: skills + hooks
 if [ "$KIRO_PRESENT" -eq 1 ]; then
 	head "Kiro detected"
-	skip "skills are Claude Code-only; installing Kiro gate hooks"
+	install_skills_into "$HOME/.kiro/skills"
 	install_hooks --kiro "Kiro"
 else
 	head "Kiro"
-	skip "not detected (no ~/.kiro or $STORE_DIR/.kiro) — skipping hooks"
+	skip "not detected (no ~/.kiro or $STORE_DIR/.kiro) — skipping skills + hooks"
 fi
 
 # git: gate hooks (foundational, installed whenever the store is a git repo)
@@ -116,7 +124,7 @@ if [ "$CLAUDE_PRESENT" -eq 0 ] && [ "$KIRO_PRESENT" -eq 0 ]; then
 	warn "No supported agent toolchains found (Claude Code, Kiro)."
 else
 	head "Done"
-	[ "$CLAUDE_PRESENT" -eq 1 ] && ok "skills available as /spec, /dev, /code-review"
+	{ [ "$CLAUDE_PRESENT" -eq 1 ] || [ "$KIRO_PRESENT" -eq 1 ]; } && ok "skills available as /spec, /dev, /code-review"
 	if [ "$HAVE_MEMPHIS" -ne 1 ]; then
 		warn "Install the memphis binary and re-run to finish wiring the gate hooks."
 	elif [ "$IS_STORE" -ne 1 ]; then
