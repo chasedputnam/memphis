@@ -50,8 +50,7 @@ func TestLoadConfig_Missing(t *testing.T) {
 	}
 	if cfg == nil {
 		t.Fatal("expected non-nil zero config")
-	}
-	if cfg.APIEndpoint != "" || cfg.APIToken != "" {
+	} else if cfg.APIEndpoint != "" || cfg.APIToken != "" {
 		t.Errorf("expected empty config, got %+v", cfg)
 	}
 }

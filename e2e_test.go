@@ -560,3 +560,30 @@ func TestE2EValidateWarnsOnMissingSummary(t *testing.T) {
 		t.Errorf("Expected missing_summary warning in output, got: %s", output)
 	}
 }
+
+// TestE2EInitNewGate proves the Quick Start step-1 -> step-2 handoff: a store
+// scaffolded by `init` is immediately usable by `new` and passes `gate`, with no
+// hand-authored config (Requirement 1).
+func TestE2EInitNewGate(t *testing.T) {
+	storeDir := filepath.Join(t.TempDir(), "store")
+
+	initCmd := exec.Command(testBinaryPath, "init", storeDir)
+	if out, err := initCmd.CombinedOutput(); err != nil {
+		t.Fatalf("init failed: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(storeDir, ".okf", "config.yaml")); err != nil {
+		t.Fatalf("init did not write config: %v", err)
+	}
+
+	artifact := filepath.Join(storeDir, "canon", "adr-001-example.md")
+	newCmd := exec.Command(testBinaryPath, "new", "decision", artifact,
+		"--store", storeDir, "--title", "Example decision")
+	if out, err := newCmd.CombinedOutput(); err != nil {
+		t.Fatalf("new failed: %v\n%s", err, out)
+	}
+
+	gateCmd := exec.Command(testBinaryPath, "gate", storeDir)
+	if out, err := gateCmd.CombinedOutput(); err != nil {
+		t.Fatalf("gate failed on a freshly scaffolded store: %v\n%s", err, out)
+	}
+}

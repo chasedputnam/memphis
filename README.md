@@ -135,24 +135,130 @@ workflow.
 
 ## Quick Start
 
-### 1. Crawl a Documentation Site
+memphis operates on a **store**: a single directory, versioned in Git, that holds both tiers over one substrate. A store is just:
 
-```bash
-memphis crawl https://docs.example.com --out ./my-bundle
+```
+my-store/
+├── .okf/config.yaml     # store config: repository_key, canon_roots, enforcement
+├── canon/               # Canon tier — typed authoritative artifacts (memphis new / promote)
+└── reference/           # Reference tier — ingested OKF bundle (memphis crawl / import)
 ```
 
-### 2. Or Import Local Markdown
+There is no separate "create a bundle" step apart from "create a store." The Reference OKF bundle and the Canon artifacts are **two tiers of the same store**, distinguished only by whether a file lives under a `canon_roots` directory. You serve the whole store — both tiers — with one `memphis serve`. See [How Canon and Reference fit together](#how-canon-and-reference-fit-together) for the integration model.
+
+### 1. Initialize a store
+
+`memphis init` scaffolds the store for you: it writes a self-documenting `.okf/config.yaml` and creates the `canon_roots` directories. Defaults match memphis's implicit configuration, so you can override only what you need.
 
 ```bash
-memphis import ./docs --out ./my-bundle
+memphis init my-store && cd my-store
+git init                     # the store is just Markdown in Git
+
+# Override defaults as needed:
+# memphis init my-store --repository-key PROJ --canon-root canon --ticketing jira
 ```
 
-#### Ex: Enable an Existing Repository
+`canon_roots` lists the directories that hold the authority tier; everything else under the store is treated as Reference. The generated `.okf/config.yaml` looks like:
 
-Turn any repository with scattered Markdown files into a searchable knowledge bundle:
+```yaml
+# Repository key: prefix for minted Canon artifact IDs (e.g. OKF-3F8A...).
+repository_key: OKF
+
+# Canon roots: directories that hold the authoritative tier. Everything else
+# under the store is treated as Reference. Files here are validated by `memphis gate`.
+canon_roots:
+  - canon
+
+# Ticketing provider: format-lints external "## Related Tickets" links.
+# One of: github, jira, linear, azure-devops, servicenow, none.
+ticketing:
+  provider: github
+
+# Enforcement: reclassify gate findings by rule code. Empty = each rule keeps
+# its default severity. Uncomment and list rule codes to override.
+enforcement: {}
+```
+
+### 2. Author authoritative knowledge (Canon)
+
+Scaffold a typed artifact, fill in its sections, and check it. This is the durable system of record — the *why* and the *what must hold*.
 
 ```bash
-# Import all Markdown files from a repository
+memphis new decision canon/adr-001-use-bleve.md --title "Use Bleve for search"
+$EDITOR canon/adr-001-use-bleve.md      # fill in ## Status, ## Decision, etc.
+memphis gate .                          # validate + relationship integrity
+```
+
+### 3. Ingest reference knowledge (the OKF bundle)
+
+Crawl a docs site or import local Markdown **into the same store**, under a non-Canon directory. This populates the Reference tier — the searchable "filing cabinet."
+
+```bash
+# Crawl a documentation site into the store's reference/ directory
+memphis crawl https://docs.example.com --out ./reference
+
+# …or import local Markdown
+memphis import ~/docs --out ./reference --source-name "My Docs"
+```
+
+Steps 2 and 3 are independent — a store can have Canon only, Reference only, or both. A store with no Canon behaves exactly like legacy memphis.
+
+### 4. Build the unified indexes
+
+Regenerate the full-text search index and relationship graph over **both** tiers from the Markdown source of truth.
+
+```bash
+memphis rebuild .
+```
+
+### 5. Gate in CI (optional)
+
+Enforce Canon quality before changes land. Emits SARIF for required-checks.
+
+```bash
+memphis gate . --sarif > memphis.sarif
+```
+
+### 6. Serve the whole store over MCP
+
+One server exposes both tiers — Canon authority tools *and* Reference search/read tools.
+
+```bash
+memphis serve . --mcp
+```
+
+### 7. Configure your AI client
+
+Add to your MCP client configuration (e.g., Claude Desktop). Point it at the **store root**, not a sub-bundle, so the agent gets Canon and Reference together.
+
+```json
+{
+  "mcpServers": {
+    "my-store": {
+      "command": "memphis",
+      "args": ["serve", "/abs/path/to/my-store", "--mcp"]
+    }
+  }
+}
+```
+
+### How Canon and Reference fit together
+
+Creating Canon does **not** generate the OKF bundle, and ingesting docs does **not** create Canon — they are deliberately separate tiers because they have different lifecycles and different costs of being wrong. They are unified by the **store**, not by a single command:
+
+- **One directory, two tiers.** `canon_roots` in `.okf/config.yaml` is the only thing that separates them. Canon lives under those roots; everything else under the store root is Reference. Both are plain Markdown in the same Git repo.
+- **`memphis rebuild`** regenerates one search index and one relationship graph spanning both tiers, so an agent's search and context assembly see authority and reference together (Canon ranked first, with citations).
+- **`memphis serve`** loads the whole store and exposes both [Canon authority tools](#canon-authority-tools) and [search & read tools](#search--read-tools) from a single MCP endpoint.
+- **`memphis promote`** is the one bridge: it graduates a Reference concept into a typed Canon draft when ingested material matures into a decision worth enforcing.
+
+Practically: set up the store once (step 1), then use `new`/`gate` to grow Canon and `crawl`/`import` to grow Reference, `rebuild` to index both, and `serve` to expose both.
+
+### Enable an existing repository (Reference-only retrofit)
+
+To make a code repository's scattered Markdown searchable without authoring Canon, import it into a self-contained `.okf` bundle and serve that directory directly. (Here the bundle dir *is* the store root; with no `canon_roots` populated it stays pure Reference.)
+
+```bash
+# Import all Markdown from a repository into a bundle
 memphis import ~/repo/my-project --out ~/repo/my-project/.okf --source-name "My Project"
 
 # Filter to specific directories or patterns
@@ -165,16 +271,11 @@ memphis import ~/repo/my-project \
   --exclude "node_modules/**" \
   --exclude "vendor/**"
 
-# Add .okf to .gitignore (optional)
-echo ".okf/" >> ~/repo/my-project/.gitignore
-
-# Serve to AI agents
+# Serve the bundle to AI agents
 memphis serve ~/repo/my-project/.okf --mcp
 ```
 
-This creates a `.okf` bundle inside your repository that indexes all documentation, READMEs, ADRs, and other Markdown content. AI agents can then search and navigate your project's knowledge base.
-
-**Example: Enable a monorepo**
+**Example: enable a monorepo**
 ```bash
 memphis import ~/repo/cloud-platform \
   --out ~/repo/cloud-platform/.okf \
@@ -189,45 +290,92 @@ memphis import ~/repo/cloud-platform \
 
 **Keep the bundle updated**
 ```bash
-# Re-import when docs change
-memphis update ~/repo/my-project/.okf --force
-```
-
-### 4. Validate Your Bundle
-
-```bash
-memphis validate ./my-bundle
-```
-
-### 5. Serve via MCP
-
-```bash
-memphis serve ./my-bundle --mcp
-```
-
-### 6. Configure Your AI Client
-
-Add to your MCP client configuration (e.g., Claude Desktop):
-
-```json
-{
-  "mcpServers": {
-    "my-docs": {
-      "command": "memphis",
-      "args": ["serve", "./my-bundle", "--mcp"]
-    }
-  }
-}
+memphis update ~/repo/my-project/.okf --force   # re-import when docs change
 ```
 
 ## Commands
 
-### `memphis crawl <url>`
+Commands are grouped and ordered by where they fall in the store lifecycle. Canon (authority) commands resolve `canon_roots` relative to a **store root** (`--store`, or the `[store]` positional, default `.`); Reference commands target a **bundle/output directory**. In a unified store these are the same directory.
 
-Crawl a documentation website and create an OKF bundle.
+### Store setup
+
+#### `memphis init [path]`
+
+Scaffold a new store: write a self-documenting `.okf/config.yaml` and create the `canon_roots` directories. Defaults match memphis's implicit configuration, so an initialized store and a config-less store behave identically. Safe by default — refuses to overwrite an existing store without `--force`.
 
 ```bash
-memphis crawl https://docs.example.com --out ./bundle [options]
+memphis init my-store
+memphis init . --repository-key PROJ --canon-root canon --ticketing jira
+```
+
+Options:
+- `--repository-key` - Repository key for minted Canon IDs (default: `OKF`)
+- `--canon-root` - Canon root directory; repeatable (default: `canon`)
+- `--ticketing` - Ticketing provider: `github` (default), `jira`, `linear`, `azure-devops`, `servicenow`, `none`
+- `--force` - Overwrite an existing `.okf/config.yaml`
+- `--quiet` - Suppress success output (for scripting)
+
+### Canon (authority) commands
+
+These operate on the typed artifacts under `canon_roots`. They are no-ops on a pure-Reference store.
+
+#### `memphis new <type> <path>`
+
+Scaffold a typed Canon artifact (`requirement`, `decision`, `design`, `roadmap`, `prompt`) with a freshly minted opaque ID and the type's required + recommended sections. Write the file under a `canon_roots` directory so it is recognized as Canon.
+
+```bash
+memphis new decision canon/adr-001-use-bleve.md --title "Use Bleve for search"
+memphis new requirement canon/req-search.md --store .
+```
+
+Options:
+- `--store` - Store root used to load config / mint IDs (default: `.`)
+- `--title` - Artifact title (defaults to a humanized filename)
+
+#### `memphis gate [store]`
+
+Run the unified authority gate: validate every Canon artifact, check relationship integrity, and classify findings as blocking or advisory per the store's `enforcement` policy. Exits non-zero if any blocking finding exists. This is the command to wire into CI.
+
+```bash
+memphis gate .                 # human output
+memphis gate . --json          # machine-readable result
+memphis gate . --sarif         # SARIF 2.1.0 for CI required-checks
+```
+
+#### `memphis relationships [store]`
+
+Report and validate the typed relationship graph (`## Related <Type>` / `## Supersedes` edges).
+
+```bash
+memphis relationships .                       # list edges
+memphis relationships . --validate            # + integrity issues (fails on errors)
+memphis relationships . --summary             # + coverage / orphans / broken counts
+memphis relationships . --validate --json
+```
+
+#### `memphis promote <concept> --type <type>`
+
+Promote an ingested Reference concept into a typed Canon draft — mints an ID, scaffolds the type's sections, and seeds the concept's content into the primary prose section. The draft is then validated so it is never silently treated as authoritative. This is the bridge from Reference to Canon.
+
+```bash
+memphis promote guides/caching.md --type decision
+```
+
+Options:
+- `--store` - Store root (default: `.`)
+- `--type` - Canon type to promote to (`requirement`, `decision`, `design`, `roadmap`, `prompt`)
+- `--out` - Output path (defaults to `<first canon root>/<slug>.md`)
+
+### Reference (ingestion) commands
+
+These build and maintain the Reference OKF bundle — the searchable filing cabinet.
+
+#### `memphis crawl <url>`
+
+Crawl a documentation website and create (or populate) an OKF bundle.
+
+```bash
+memphis crawl https://docs.example.com --out ./reference [options]
 ```
 
 Options:
@@ -242,12 +390,12 @@ Options:
 - `--force` - Overwrite output directory
 - `--dry-run` - List pages without crawling
 
-### `memphis import <path>`
+#### `memphis import <path>`
 
 Import local files into an OKF bundle.
 
 ```bash
-memphis import ./docs --out ./bundle [options]
+memphis import ./docs --out ./reference [options]
 ```
 
 Options:
@@ -263,61 +411,12 @@ Options:
 
 See [Summarization](#summarization) for what each mode and algorithm does, and how to configure LLM providers.
 
-### `memphis validate <bundle>`
-
-Validate an OKF bundle structure and health.
-
-```bash
-memphis validate ./bundle [--json]
-```
-
-Validates:
-- Index structure and frontmatter
-- Concept frontmatter (required `type` field)
-- Internal link integrity (broken links)
-- **Filing cabinet health**: missing summary callouts, summary length, scale ceiling
-
-Missing summaries produce warnings (not errors) for backward compatibility with older bundles.
-
-### `memphis inspect <bundle>`
-
-Display bundle statistics and scale metrics.
-
-```bash
-memphis inspect ./bundle
-memphis inspect ./bundle --recommendations
-```
-
-Output includes:
-- Concept count, link count, broken links, orphan concepts
-- Type and tag distribution
-- **Scale metrics**: total tokens, average tokens per concept, index ratio
-- **Scale status**: healthy, warning (approaching ceiling), or exceeded
-
-Options:
-- `--recommendations` - Show RAG graduation guidance if scale ceiling is exceeded
-
-When a bundle exceeds ~100 concepts or ~400K tokens, `inspect` warns that the filing cabinet pattern is approaching its scale ceiling. Use `--recommendations` to see guidance on adding vector search.
-
-### `memphis serve <bundle>`
-
-Start an MCP server for a bundle.
-
-```bash
-memphis serve ./bundle --mcp
-```
-
-Options:
-- `--mcp` - Use MCP stdio transport (default: true)
-- `--name` - Server name
-- `--max-result-chars` - Maximum characters in tool results (default: 12000)
-
-### `memphis update <bundle>`
+#### `memphis update <bundle>`
 
 Update an existing OKF bundle from its original source.
 
 ```bash
-memphis update ./bundle [options]
+memphis update ./reference [options]
 ```
 
 The source is automatically read from the bundle's `changelog.txt` file (created during crawl or import). You can override it with the `--source` flag.
@@ -340,72 +439,72 @@ When omitted, summarization flags default to whatever was last recorded in the b
 
 Example workflow:
 ```bash
-# Initial crawl
-memphis crawl https://docs.example.com --out ./my-bundle
-
-# Later, update with changes
-memphis update ./my-bundle --dry-run  # Preview changes
-memphis update ./my-bundle --force    # Apply all changes
-memphis update ./my-bundle            # Interactive mode
+memphis crawl https://docs.example.com --out ./reference  # initial crawl
+memphis update ./reference --dry-run                      # preview changes
+memphis update ./reference --force                        # apply all changes
+memphis update ./reference                                # interactive mode
 ```
 
-### `memphis demo`
+### Store operation commands
 
-Run an offline demo with the bundled example.
-
-```bash
-memphis demo [--serve]
-```
-
-### Canon commands
-
-These operate on the **authority** tier (typed artifacts under the configured `canon_roots`). They are no-ops on a pure-Reference store.
-
-#### `memphis new <type> <path>`
-
-Scaffold a typed Canon artifact (`requirement`, `decision`, `design`, `roadmap`, `prompt`) with a freshly minted opaque ID and the type's required + recommended sections.
-
-```bash
-memphis new decision canon/adr-001-use-bleve.md --title "Use Bleve for search"
-memphis new requirement canon/req-search.md --store .
-```
-
-#### `memphis gate [store]`
-
-Run the unified authority gate: validate every Canon artifact, check relationship integrity, and classify findings as blocking or advisory per the store's `enforcement` policy. Exits non-zero if any blocking finding exists.
-
-```bash
-memphis gate .                 # human output
-memphis gate . --json          # machine-readable result
-memphis gate . --sarif         # SARIF 2.1.0 for CI required-checks
-```
-
-#### `memphis relationships [store]`
-
-Report and validate the typed relationship graph.
-
-```bash
-memphis relationships .                       # list edges
-memphis relationships . --validate            # + integrity issues (fails on errors)
-memphis relationships . --summary             # + coverage / orphans / broken counts
-memphis relationships . --validate --json
-```
-
-#### `memphis promote <concept> --type <type>`
-
-Promote an ingested Reference concept into a typed Canon draft — mints an ID, scaffolds the type's sections, and seeds the concept's content into the primary prose section. The draft is then validated so it is never silently treated as authoritative.
-
-```bash
-memphis promote guides/caching.md --type decision
-```
+These operate on the store as a whole — both tiers.
 
 #### `memphis rebuild [store]`
 
-Regenerate all derived indexes (full-text search, relationship graph) from the Markdown source of truth. Derived indexes are caches — deleting and rebuilding them never affects the canonical files.
+Regenerate all derived indexes (full-text search, relationship graph) over **both tiers** from the Markdown source of truth. Derived indexes are caches — deleting and rebuilding them never affects the canonical files. Run this after authoring Canon or ingesting Reference.
 
 ```bash
 memphis rebuild .
 ```
+
+#### `memphis serve <store>`
+
+Start an MCP server over a store. Loads both tiers: the Reference bundle plus, when present, the Canon authority tier and its tools.
+
+```bash
+memphis serve . --mcp
+```
+
+Options:
+- `--mcp` - Use MCP stdio transport (default: true)
+- `--name` - Server name
+- `--max-result-chars` - Maximum characters in tool results (default: 12000)
+
+#### `memphis validate <bundle>`
+
+Validate an OKF bundle's structure and filing-cabinet health (Reference tier). For Canon quality use `memphis gate`.
+
+```bash
+memphis validate ./reference [--json]
+```
+
+Validates:
+- Index structure and frontmatter
+- Concept frontmatter (required `type` field)
+- Internal link integrity (broken links)
+- **Filing cabinet health**: missing summary callouts, summary length, scale ceiling
+
+Missing summaries produce warnings (not errors) for backward compatibility with older bundles.
+
+#### `memphis inspect <bundle>`
+
+Display bundle statistics and scale metrics.
+
+```bash
+memphis inspect ./reference
+memphis inspect ./reference --recommendations
+```
+
+Output includes:
+- Concept count, link count, broken links, orphan concepts
+- Type and tag distribution
+- **Scale metrics**: total tokens, average tokens per concept, index ratio
+- **Scale status**: healthy, warning (approaching ceiling), or exceeded
+
+Options:
+- `--recommendations` - Show RAG graduation guidance if scale ceiling is exceeded
+
+When a bundle exceeds ~100 concepts or ~400K tokens, `inspect` warns that the filing cabinet pattern is approaching its scale ceiling. Use `--recommendations` to see guidance on adding vector search.
 
 #### `memphis export [store]`
 
@@ -415,6 +514,14 @@ Export the **Reference** tier for graduation to an external RAG or graph backend
 memphis export . --documents        # Reference concepts as JSONL (for RAG)
 memphis export . --graph            # relationship graph as JSON
 memphis export . --documents --out refs.jsonl
+```
+
+#### `memphis demo`
+
+Run an offline demo with the bundled example.
+
+```bash
+memphis demo [--serve]
 ```
 
 ## MCP Tools

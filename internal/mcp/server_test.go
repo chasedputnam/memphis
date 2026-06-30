@@ -56,9 +56,7 @@ This is a test concept with some content.
 
 	if server == nil {
 		t.Fatal("expected server to be non-nil")
-	}
-
-	if server.search == nil {
+	} else if server.search == nil {
 		t.Error("expected search to be initialized")
 	}
 }

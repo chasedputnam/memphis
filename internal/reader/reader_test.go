@@ -73,23 +73,23 @@ okf_version: "0.1"
 	testConcept := concepts["test"]
 	if testConcept == nil {
 		t.Fatal("test concept not found")
-	}
-	if testConcept.Type != "Guide" {
-		t.Errorf("Type = %q, want %q", testConcept.Type, "Guide")
-	}
-	if testConcept.Title != "Test Concept" {
-		t.Errorf("Title = %q, want %q", testConcept.Title, "Test Concept")
-	}
-	if len(testConcept.Tags) != 2 {
-		t.Errorf("len(Tags) = %d, want 2", len(testConcept.Tags))
+	} else {
+		if testConcept.Type != "Guide" {
+			t.Errorf("Type = %q, want %q", testConcept.Type, "Guide")
+		}
+		if testConcept.Title != "Test Concept" {
+			t.Errorf("Title = %q, want %q", testConcept.Title, "Test Concept")
+		}
+		if len(testConcept.Tags) != 2 {
+			t.Errorf("len(Tags) = %d, want 2", len(testConcept.Tags))
+		}
 	}
 
 	// Check other concept
 	otherConcept := concepts["other"]
 	if otherConcept == nil {
 		t.Fatal("other concept not found")
-	}
-	if otherConcept.Type != "API Reference" {
+	} else if otherConcept.Type != "API Reference" {
 		t.Errorf("Type = %q, want %q", otherConcept.Type, "API Reference")
 	}
 }

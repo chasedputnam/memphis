@@ -101,8 +101,7 @@ Users are unauthenticated.
 	c := res.Items[0].Citation
 	if c == nil {
 		t.Fatal("canon item missing citation")
-	}
-	if c.ID != "OKF-0123456789AB" || c.Type != "requirement" || c.Status != "" {
+	} else if c.ID != "OKF-0123456789AB" || c.Type != "requirement" || c.Status != "" {
 		t.Errorf("bad citation: %+v", c)
 	}
 }

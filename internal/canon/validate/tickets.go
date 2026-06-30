@@ -1,6 +1,9 @@
 package validate
 
-import "regexp"
+import (
+	"regexp"
+	"sort"
+)
 
 // Ticket format validators, ported from rac-core validation.py TICKETING_PROVIDERS.
 // Each accepts the provider's key format or any http(s) URL. The check is pure and
@@ -32,4 +35,18 @@ var ticketValidators = map[string]ticketValidator{
 	"linear":       {ticketLinearRe, "Linear key (e.g. ENG-123) or URL"},
 	"azure-devops": {ticketADORe, "Azure DevOps work item (e.g. 1234 or AB#1234) or URL"},
 	"servicenow":   {ticketServiceNowRe, "ServiceNow record (e.g. INC0010023) or URL"},
+}
+
+// KnownProviders returns the recognized ticketing provider keys, sorted. The
+// special values "none" and "" are always accepted by callers but are not part
+// of this vocabulary, so they are not returned. This is the single source of
+// truth for the provider set (reused by `memphis init` so it never drifts from
+// the gate's linting).
+func KnownProviders() []string {
+	keys := make([]string, 0, len(ticketValidators))
+	for k := range ticketValidators {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
